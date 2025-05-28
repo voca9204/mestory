@@ -1,0 +1,51 @@
+{
+  "name": "mestory",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "firebase:login": "firebase login",
+    "firebase:init": "firebase init",
+    "firebase:deploy": "firebase deploy",
+    "firebase:emulators": "firebase emulators:start",
+    "db:indexes:generate": "node scripts/manage-indexes.js generate",
+    "db:indexes:deploy": "node scripts/manage-indexes.js deploy",
+    "db:indexes:status": "node scripts/manage-indexes.js status",
+    "db:indexes:all": "node scripts/manage-indexes.js all",
+    "test:performance": "npm run build && node -e \"import('./dist/services/performanceTests.js').then(m => m.runQueryPerformanceTests())\"",
+    "test:queries": "npm run db:indexes:status && npm run test:performance",
+    "optimize": "npm run db:indexes:generate && npm run db:indexes:deploy && npm run test:performance"
+  },
+  "dependencies": {
+    "@headlessui/react": "^1.7.17",
+    "@heroicons/react": "^2.0.18",
+    "@types/uuid": "^10.0.0",
+    "clsx": "^2.0.0",
+    "date-fns": "^2.30.0",
+    "firebase": "^10.7.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.1",
+    "tailwindcss": "^3.3.6",
+    "uuid": "^11.1.0",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "postcss": "^8.4.32",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.8"
+  }
+}
