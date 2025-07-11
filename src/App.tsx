@@ -6,6 +6,9 @@ import { TimelinePage } from './pages/TimelinePage'
 import { DiaryPage } from './pages/DiaryPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { AuthPage } from './pages/AuthPage'
+import MissionsPage from './pages/MissionsPage'
+import NewMissionPage from './pages/NewMissionPage'
+import ActiveMissionsPage from './pages/ActiveMissionsPage'
 import { Navigation } from './components/Navigation'
 
 // 로딩 스피너 컴포넌트
@@ -36,6 +39,9 @@ const AuthenticatedApp = () => {
           <Route path="/" element={<HomePage />} />
           <Route path="/timeline" element={<TimelinePage />} />
           <Route path="/diary/:date?" element={<DiaryPage />} />
+          <Route path="/missions" element={<MissionsPage />} />
+          <Route path="/missions/new" element={<NewMissionPage />} />
+          <Route path="/missions/active" element={<ActiveMissionsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>

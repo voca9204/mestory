@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { format, startOfYear, endOfYear, eachDayOfInterval, isSameDay, getDayOfYear } from 'date-fns'
+import { format, startOfYear, endOfYear, eachDayOfInterval, isSameDay, getDayOfYear, isLeapYear } from 'date-fns'
 import { useData } from '../contexts/DataContext'
 
 interface Timeline2DProps {
@@ -7,31 +7,133 @@ interface Timeline2DProps {
   onDateSelect: (date: Date) => void
 }
 
-interface TooltipData {
-  date: Date
-  diary: any
-  position: { x: number, y: number }
-}
-
 export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
-  const { isUsingMockData, getDatesWithData, getDiaryByDate } = useData()
+  const { isUsingMockData, hasDataForDate, getDiaryByDate, getDatesWithData } = useData()
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
-  const [scale, setScale] = useState(2)
+  const [scale, setScale] = useState(2) // 기본 줌을 200%로 설정
   const [dragState, setDragState] = useState({ isDragging: false, lastX: 0, lastY: 0 })
+  
+  // 🚀 성능 최적화를 위한 데이터 캐싱 - 대폭 개선
+  const [dataCache, setDataCache] = useState<Map<string, boolean>>(new Map())
+  const [diaryCache, setDiaryCache] = useState<Map<string, any>>(new Map())
+  const [isLoadingData, setIsLoadingData] = useState(false)
+  const [batchLoadingYears, setBatchLoadingYears] = useState<Set<number>>(new Set())
+
+  // 🚀 NEW: 배치 처리로 연도별 데이터 존재 여부를 한 번에 조회
+  const loadYearDataOptimized = useCallback(async (year: number) => {
+    if (batchLoadingYears.has(year)) return // 이미 로딩 중인 연도는 스킵
+    
+    console.log(`🚀 [OPTIMIZED] Starting ultra-fast batch data loading for year ${year}...`)
+    setBatchLoadingYears(prev => new Set(prev).add(year))
+    setIsLoadingData(true)
+    
+    try {
+      const startDate = `${year}-01-01`
+      const endDate = `${year}-12-31`
+      
+      // 🔥 핵심 최적화: 단일 쿼리로 연도 전체의 데이터 존재 날짜들을 조회
+      const datesWithData = await getDatesWithData(startDate, endDate)
+      console.log(`📊 Year ${year}: Found ${datesWithData.length} dates with data`)
+      
+      // 연도의 모든 날짜를 생성
+      const yearDates = eachDayOfInterval({
+        start: startOfYear(new Date(year, 0, 1)),
+        end: endOfYear(new Date(year, 0, 1))
+      })
+      
+      // 데이터 존재 날짜들을 Set으로 변환 (빠른 검색을 위해)
+      const dataDateSet = new Set(datesWithData)
+      
+      // 배치로 캐시 업데이트 (개별 API 호출 없이)
+      const newDataCache = new Map(dataCache)
+      yearDates.forEach(date => {
+        const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+        const hasData = dataDateSet.has(dateString)
+        newDataCache.set(dateString, hasData)
+      })
+      
+      setDataCache(newDataCache)
+      
+      // 필요한 경우 일기 데이터도 미리 로딩 (선택적)
+      if (datesWithData.length <= 50) { // 일기가 너무 많지 않으면 미리 로딩
+        console.log(`💾 Pre-loading ${datesWithData.length} diaries for year ${year}`)
+        const diaryPromises = datesWithData.map(async (dateString) => {
+          try {
+            const diary = await getDiaryByDate(dateString)
+            if (diary) {
+              setDiaryCache(prev => new Map(prev.set(dateString, diary)))
+            }
+          } catch (error) {
+            console.warn(`Error pre-loading diary for ${dateString}:`, error)
+          }
+        })
+        
+        // 10개씩 배치로 처리
+        for (let i = 0; i < diaryPromises.length; i += 10) {
+          const batch = diaryPromises.slice(i, i + 10)
+          await Promise.all(batch)
+          console.log(`📖 Pre-loaded diaries: ${Math.min(i + 10, diaryPromises.length)}/${diaryPromises.length}`)
+        }
+      }
+      
+      console.log(`✅ [OPTIMIZED] Completed ultra-fast batch loading for year ${year}`)
+    } catch (error) {
+      console.error(`❌ Error in optimized batch loading for year ${year}:`, error)
+    } finally {
+      setBatchLoadingYears(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(year)
+        return newSet
+      })
+      
+      // 모든 연도 로딩이 완료되면 전체 로딩 상태 해제
+      if (batchLoadingYears.size <= 1) {
+        setIsLoadingData(false)
+      }
+    }
+  }, [getDatesWithData, getDiaryByDate, dataCache, batchLoadingYears])
+
+  // 캐시된 데이터로 hasDataForDate 확인하는 함수
+  const getCachedDataStatus = useCallback((date: Date) => {
+    const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    return dataCache.get(dateString) || false
+  }, [dataCache])
+
+  // 캐시된 일기 데이터 가져오는 함수 - 성능 최적화
+  const getDiaryOptimized = useCallback((date: Date) => {
+    const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    
+    // 캐시된 일기 데이터가 있으면 반환
+    if (diaryCache.has(dateString)) {
+      return diaryCache.get(dateString)
+    }
+    
+    // 캐시에 없고 데이터가 있다고 확인된 경우에만 로딩 시도
+    if (dataCache.get(dateString) === true) {
+      // 일기 데이터만 별도로 로딩 (이미 데이터 존재가 확인됨)
+      getDiaryByDate(dateString).then(diary => {
+        if (diary) {
+          setDiaryCache(prev => new Map(prev.set(dateString, diary)))
+        }
+      }).catch(error => {
+        console.error(`Error loading diary for ${dateString}:`, error)
+      })
+    }
+    
+    return null
+  }, [diaryCache, dataCache, getDiaryByDate])
+
+  // 데이터 캐시 초기화 함수
+  const clearDataCache = useCallback(() => {
+    setDataCache(new Map())
+    setDiaryCache(new Map())
+    setBatchLoadingYears(new Set())
+    console.log('🗑️ Data cache cleared')
+  }, [])
+
+  // 상태 변수들
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [isInitialized, setIsInitialized] = useState(false)
-  
-  // 🚀 단순화된 캐시 - 성능 최적화
-  const [yearDataCache, setYearDataCache] = useState<Map<number, Set<string>>>(new Map())
-  const [loadingYears, setLoadingYears] = useState<Set<number>>(new Set())
-  
-  // 🎯 NEW: 호버 툴팁 상태
-  const [tooltipData, setTooltipData] = useState<TooltipData | null>(null)
-  const [isLoadingTooltip, setIsLoadingTooltip] = useState(false)
-  const [hoveredDate, setHoveredDate] = useState<Date | null>(null)
-  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const diaryCache = useRef<Map<string, any>>(new Map())
-  
   const containerRef = useRef<HTMLDivElement>(null)
   const todayCellRef = useRef<HTMLDivElement>(null)
 
@@ -43,156 +145,16 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
   // 연도 범위 설정
   const currentYearNum = new Date().getFullYear()
   const years = useMemo(() => {
-    const startYear = currentYearNum - 5
-    const endYear = currentYearNum + 10
+    const startYear = currentYearNum - 5  // 과거 5년
+    const endYear = currentYearNum + 10   // 미래 10년
     return Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i)
   }, [currentYearNum])
 
   const maxDaysInYear = 366
   const [isAnimating, setIsAnimating] = useState(false)
 
-  // 🚀 최적화된 연도 데이터 로딩 - 단일 API 호출
-  const loadYearData = useCallback(async (year: number) => {
-    if (yearDataCache.has(year) || loadingYears.has(year)) {
-      return // 이미 로딩됐거나 로딩 중이면 스킵
-    }
-
-    console.log(`📅 Loading data for year ${year}...`)
-    setLoadingYears(prev => new Set(prev).add(year))
-    
-    try {
-      const startDate = `${year}-01-01`
-      const endDate = `${year}-12-31`
-      
-      // 🔥 핵심 개선: 단일 API 호출로 연도 전체 데이터 가져오기
-      const datesWithData = await getDatesWithData(startDate, endDate)
-      
-      // Set으로 변환해서 빠른 검색 가능
-      const dateSet = new Set(datesWithData)
-      
-      // 캐시에 저장
-      setYearDataCache(prev => new Map(prev).set(year, dateSet))
-      
-      console.log(`✅ Year ${year}: Found ${datesWithData.length} dates with data`)
-    } catch (error) {
-      console.error(`❌ Error loading year ${year}:`, error)
-    } finally {
-      setLoadingYears(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(year)
-        return newSet
-      })
-    }
-  }, [getDatesWithData, yearDataCache, loadingYears])
-
-  // 🚀 최적화된 데이터 존재 여부 확인
-  const hasDataForDate = useCallback((date: Date): boolean => {
-    const year = date.getFullYear()
-    const dateString = `${year}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-    
-    const yearData = yearDataCache.get(year)
-    if (yearData) {
-      return yearData.has(dateString)
-    }
-    
-    // 데이터가 없으면 로딩 시작 (비동기)
-    if (!loadingYears.has(year)) {
-      loadYearData(year)
-    }
-    
-    return false
-  }, [yearDataCache, loadingYears, loadYearData])
-
-  // 🎯 NEW: 툴팁용 일기 데이터 로딩
-  const loadDiaryForTooltip = useCallback(async (date: Date, mousePosition: { x: number, y: number }) => {
-    const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-    
-    // 캐시에서 먼저 확인
-    if (diaryCache.current.has(dateString)) {
-      const diary = diaryCache.current.get(dateString)
-      setTooltipData({
-        date,
-        diary,
-        position: mousePosition
-      })
-      return
-    }
-
-    setIsLoadingTooltip(true)
-    try {
-      const diary = await getDiaryByDate(dateString)
-      
-      if (diary) {
-        // 캐시에 저장
-        diaryCache.current.set(dateString, diary)
-        
-        // 아직 같은 날짜에 호버하고 있으면 툴팁 표시
-        if (hoveredDate && isSameDay(hoveredDate, date)) {
-          setTooltipData({
-            date,
-            diary,
-            position: mousePosition
-          })
-        }
-      }
-    } catch (error) {
-      console.error('일기 로딩 실패:', error)
-    } finally {
-      setIsLoadingTooltip(false)
-    }
-  }, [getDiaryByDate, hoveredDate])
-
-  // 🎯 NEW: 마우스 호버 핸들러
-  const handleDateMouseEnter = useCallback((date: Date, event: React.MouseEvent) => {
-    const hasData = hasDataForDate(date)
-    const isDragging = dragState.isDragging
-    
-    if (!hasData || isDragging) {
-      return
-    }
-    
-    setHoveredDate(date)
-    
-    // 이전 타이머 정리
-    if (tooltipTimeoutRef.current) {
-      clearTimeout(tooltipTimeoutRef.current)
-    }
-
-    // 마우스 위치 계산 (컨테이너 기준, 스케일과 오프셋 고려)
-    if (containerRef.current) {
-      const containerRect = containerRef.current.getBoundingClientRect()
-      const mousePosition = {
-        x: event.clientX - containerRect.left,
-        y: event.clientY - containerRect.top
-      }
-
-      console.log('🖱️ 마우스 이벤트:', {
-        날짜: format(date, 'M/d'), 
-        마우스좌표: `(${event.clientX}, ${event.clientY})`,
-        컨테이너좌표: `(${mousePosition.x}, ${mousePosition.y})`,
-        일기있음: hasData
-      })
-
-      // 300ms 후에 툴팁 표시 (디바운스)
-      tooltipTimeoutRef.current = setTimeout(() => {
-        loadDiaryForTooltip(date, mousePosition)
-      }, 300)
-    }
-  }, [hasDataForDate, dragState.isDragging, loadDiaryForTooltip])
-
-  // 🎯 NEW: 마우스 떠남 핸들러
-  const handleDateMouseLeave = useCallback(() => {
-    setHoveredDate(null)
-    setTooltipData(null)
-    
-    if (tooltipTimeoutRef.current) {
-      clearTimeout(tooltipTimeoutRef.current)
-      tooltipTimeoutRef.current = null
-    }
-  }, [])
-
-  // 🚀 가시 영역 연도들만 로딩
-  const loadVisibleYears = useCallback(() => {
+  // 가시 영역의 연도들을 계산하고 데이터를 로딩하는 함수 - 최적화 적용
+  const loadVisibleYearsData = useCallback(() => {
     if (!containerRef.current) return
     
     const containerRect = containerRef.current.getBoundingClientRect()
@@ -208,34 +170,41 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     const startYearIndex = Math.max(0, Math.floor((topY - padding - headerHeight) / yearRowHeight) - 1)
     const endYearIndex = Math.min(years.length - 1, Math.ceil((bottomY - padding - headerHeight) / yearRowHeight) + 1)
     
-    // 가시 영역의 연도들만 로딩
+    // 가시 영역의 연도들을 최적화된 방식으로 로딩
     for (let i = startYearIndex; i <= endYearIndex; i++) {
       if (i >= 0 && i < years.length) {
         const year = years[i]
-        loadYearData(year)
+        loadYearDataOptimized(year) // 🚀 최적화된 함수 사용
       }
     }
-  }, [offset.y, scale, cellSize, gapSize, years, loadYearData])
+    
+    console.log(`📍 [OPTIMIZED] Loading data for visible years: ${years.slice(startYearIndex, endYearIndex + 1).join(', ')}`)
+  }, [offset.y, scale, cellSize, gapSize, years, loadYearDataOptimized])
 
-  // 🚀 디바운스된 가시 영역 로딩
+  // 뷰포트 변경 시 가시 영역 데이터 로딩
   useEffect(() => {
     const timer = setTimeout(() => {
-      loadVisibleYears()
-    }, 200) // 200ms 디바운스
+      loadVisibleYearsData()
+    }, 300)
     
     return () => clearTimeout(timer)
-  }, [offset, scale]) // loadVisibleYears 의존성 제거로 무한 루프 방지
+  }, [offset, scale, loadVisibleYearsData])
 
-  // 초기 로드
+  // 초기 로드 시 현재 연도와 주변 연도 데이터 로딩 - 최적화 적용
   useEffect(() => {
     if (isInitialized) {
       const currentYearNum = new Date().getFullYear()
-      // 현재 연도만 미리 로딩
-      loadYearData(currentYearNum)
+      // 현재 연도와 전후 2년씩 미리 로딩 (최적화된 방식)
+      for (let i = -2; i <= 2; i++) {
+        const year = currentYearNum + i
+        if (years.includes(year)) {
+          loadYearDataOptimized(year) // 🚀 최적화된 함수 사용
+        }
+      }
     }
-  }, [isInitialized, loadYearData])
+  }, [isInitialized, years, loadYearDataOptimized])
 
-  // 현재 보이는 년도 계산
+  // 현재 보이는 년도 계산 및 업데이트
   const updateCurrentViewYear = useCallback(() => {
     if (!containerRef.current) return
     
@@ -257,16 +226,16 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     }
   }, [offset.y, scale, cellSize, gapSize, years, currentYear])
 
-  // 디바운스된 년도 업데이트
+  // offset이나 scale이 변경될 때마다 현재 년도 업데이트
   useEffect(() => {
     const timer = setTimeout(() => {
       updateCurrentViewYear()
     }, 100)
     
     return () => clearTimeout(timer)
-  }, [offset, scale])
+  }, [offset, scale, updateCurrentViewYear])
 
-  // 초기 위치 설정
+  // 초기 로드 시 최적의 위치로 설정
   useEffect(() => {
     if (!isInitialized && containerRef.current) {
       const today = new Date()
@@ -324,7 +293,7 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     }
   }, [isInitialized, selectedDate, onDateSelect, years])
 
-  // 오늘로 이동
+  // 오늘로 이동 함수
   const goToToday = useCallback(() => {
     const today = new Date()
     setIsAnimating(true)
@@ -376,7 +345,6 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
   // 드래그 핸들러
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsAnimating(false)
-    setTooltipData(null) // 드래그 시작하면 툴팁 숨김
     setDragState({
       isDragging: true,
       lastX: e.clientX,
@@ -446,7 +414,6 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
 
   // 날짜 클릭 핸들러
   const handleDateClick = (date: Date) => {
-    setTooltipData(null) // 클릭 시 툴팁 숨김
     onDateSelect(date)
   }
 
@@ -454,6 +421,25 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
   const isDateSelected = (date: Date) => {
     return selectedDate ? isSameDay(date, selectedDate) : false
   }
+
+  // 날짜에 데이터가 있는지 확인 - 캐시 우선 사용으로 성능 최적화
+  const hasDataForDateOptimized = useCallback((date: Date) => {
+    const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    
+    // 캐시된 데이터가 있으면 즉시 반환
+    if (dataCache.has(dateString)) {
+      return dataCache.get(dateString) || false
+    }
+    
+    // 캐시에 없으면 해당 연도 데이터 로딩 시작 (비동기)
+    const year = date.getFullYear()
+    if (!batchLoadingYears.has(year)) {
+      loadYearDataOptimized(year)
+    }
+    
+    // 로딩 중에는 false 반환 (나중에 캐시 업데이트되면 리렌더링됨)
+    return false
+  }, [dataCache, batchLoadingYears, loadYearDataOptimized])
 
   // 월별 구분선 위치 계산
   const getMonthBoundaries = (year: number) => {
@@ -466,55 +452,19 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     return boundaries
   }
 
-  // 🎯 NEW: 툴팁 위치 계산 (화면 경계 고려) - Fixed 위치용
-  const calculateTooltipPosition = (basePosition: { x: number, y: number }) => {
-    if (!containerRef.current) return basePosition
-    
-    const containerRect = containerRef.current.getBoundingClientRect()
-    const tooltipWidth = 320
-    const tooltipHeight = 250 // 좀 더 높게 설정
-    const padding = 20
-    
-    // 컨테이너 상대 위치를 화면 절대 위치로 변환
-    const screenX = containerRect.left + basePosition.x
-    const screenY = containerRect.top + basePosition.y
-    
-    let x = screenX + 15 // 마우스에서 약간 오른쪽
-    let y = screenY - tooltipHeight - 10 // 마우스 위쪽
-    
-    // 오른쪽 경계 확인 (전체 화면 기준)
-    if (x + tooltipWidth > window.innerWidth - padding) {
-      x = screenX - tooltipWidth - 15
-    }
-    
-    // 위쪽 경계 확인
-    if (y < padding) {
-      y = screenY + 25 // 마우스 아래쪽으로 이동
-    }
-    
-    // 아래쪽 경계 확인
-    if (y + tooltipHeight > window.innerHeight - padding) {
-      y = window.innerHeight - tooltipHeight - padding
-    }
-    
-    // 왼쪽 경계 확인
-    if (x < padding) {
-      x = padding
-    }
-    
-    return { x: Math.max(0, x), y: Math.max(0, y) }
-  }
-
   return (
     <div className="relative w-full h-[500px] overflow-hidden border border-gray-200 rounded-lg bg-gray-50">
-      {/* 로딩 상태 표시 */}
-      {loadingYears.size > 0 && (
+      {/* 데이터 로딩 상태 표시 */}
+      {isLoadingData && (
         <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 bg-white rounded-lg shadow-lg border border-gray-200 p-3">
           <div className="flex items-center gap-3">
             <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-sm text-gray-700">
-              {Array.from(loadingYears).join(', ')}년 데이터 로딩 중...
-            </span>
+            <span className="text-sm text-gray-700">일기 데이터 로딩 중...</span>
+            {batchLoadingYears.size > 0 && (
+              <span className="text-xs text-gray-500">
+                ({Array.from(batchLoadingYears).join(', ')}년)
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -530,34 +480,24 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
 
       {/* 컨트롤 패널 */}
       <div className="absolute top-4 left-4 z-10 bg-white rounded-lg shadow-sm border border-gray-200 p-3">
-        {/* 성능 정보 */}
-        <div className="mb-3 p-2 bg-green-50 rounded text-xs">
+        {/* 데이터 상태 표시 */}
+        <div className="mb-3 p-2 bg-gray-50 rounded text-xs">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-green-600">🚀 최적화됨</span>
+            <span className="text-gray-600">캐시된 날짜:</span>
+            <span className="font-medium text-blue-600">{dataCache.size}개</span>
+            {isLoadingData && (
+              <div className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            )}
           </div>
-          <div className="text-gray-600">
-            로딩된 연도: {yearDataCache.size}개
+          <div className="flex items-center gap-2">
+            <span className="text-gray-600">일기 캐시:</span>
+            <span className="font-medium text-green-600">{diaryCache.size}개</span>
           </div>
-          <div className="text-gray-600">
-            총 날짜: {Array.from(yearDataCache.values()).reduce((sum, dateSet) => sum + dateSet.size, 0)}개
-          </div>
-          <div className="text-gray-600">
-            일기 캐시: {diaryCache.current.size}개
-          </div>
-        </div>
-
-        {/* 🎯 NEW: 툴팁 디버깅 정보 */}
-        <div className="mb-3 p-2 bg-blue-50 rounded text-xs">
-          <div className="text-blue-700 font-medium mb-1">🔍 툴팁 상태</div>
-          <div className="text-gray-600">
-            호버 날짜: {hoveredDate ? format(hoveredDate, 'M/d') : '없음'}
-          </div>
-          <div className="text-gray-600">
-            툴팁 데이터: {tooltipData ? '✅' : '❌'}
-          </div>
-          <div className="text-gray-600">
-            로딩 중: {isLoadingTooltip ? '⏳' : '✅'}
-          </div>
+          {batchLoadingYears.size > 0 && (
+            <div className="text-xs text-orange-600 mt-1">
+              로딩 중: {Array.from(batchLoadingYears).join(', ')}년
+            </div>
+          )}
         </div>
 
         {/* 기본 컨트롤 */}
@@ -571,12 +511,22 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
           
           <button
             onClick={() => {
-              setYearDataCache(new Map())
-              setLoadingYears(new Set())
-              diaryCache.current.clear()
-              setTooltipData(null)
+              setIsAnimating(true)
+              setScale(2.0)
+              setTimeout(() => {
+                goToToday()
+                setTimeout(() => setIsAnimating(false), 150)
+              }, 50)
             }}
+            className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+          >
+            초기화
+          </button>
+
+          <button
+            onClick={clearDataCache}
             className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 rounded transition-colors"
+            title="데이터 캐시 초기화"
           >
             새로고침
           </button>
@@ -622,114 +572,15 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
         </div>
       </div>
 
-      {/* 사용법 안내 */}
+      {/* 사용법 안내 - 성능 혁신 업데이트 */}
       <div className="absolute top-4 right-4 z-10 bg-white rounded-lg shadow-sm border border-gray-200 p-2 text-xs text-gray-600">
-        <div className="font-medium mb-1">✨ 2D Timeline + 툴팁</div>
-        <div>• 일기 호버: 미리보기 툴팁</div>
+        <div className="font-medium mb-1">Timeline2D 성능 혁신 🚀</div>
+        <div>• 단일 쿼리 배치 로딩: 366개 → 1개 API 호출</div>
+        <div>• 초고속 캐싱: 즉시 재접근</div>
+        <div>• 스마트 프리로딩: 필요한 일기만 미리 로딩</div>
         <div>• 드래그: 자유 이동</div>
-        <div>• 휠: 줌 in/out</div>
+        <div>• 휠: 부드러운 줌</div>
       </div>
-
-      {/* 🎯 실제 호버 툴팁 (리치 컨텐츠) */}
-      {tooltipData && (
-        <div
-          className="fixed z-[9999] bg-white rounded-lg shadow-2xl border-2 border-blue-300 p-4 w-80 pointer-events-none"
-          style={{
-            left: `${calculateTooltipPosition(tooltipData.position).x}px`,
-            top: `${calculateTooltipPosition(tooltipData.position).y}px`,
-            zIndex: 9999
-          }}
-        >
-          {/* 디버깅 정보 */}
-          <div className="mb-2 p-1 bg-blue-100 rounded text-xs text-blue-700">
-            위치: {Math.round(tooltipData.position.x)}, {Math.round(tooltipData.position.y)} | 
-            계산된 위치: {Math.round(calculateTooltipPosition(tooltipData.position).x)}, {Math.round(calculateTooltipPosition(tooltipData.position).y)}
-          </div>
-
-          {/* 툴팁 헤더 */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-medium text-gray-900">
-              {format(tooltipData.date, 'M월 d일')}
-            </div>
-            {tooltipData.diary?.mood && (
-              <span className={`text-xs px-2 py-1 rounded-full ${
-                tooltipData.diary.mood === 'great' ? 'bg-green-100 text-green-700' :
-                tooltipData.diary.mood === 'good' ? 'bg-blue-100 text-blue-700' :
-                tooltipData.diary.mood === 'neutral' ? 'bg-gray-100 text-gray-700' :
-                tooltipData.diary.mood === 'bad' ? 'bg-yellow-100 text-yellow-700' :
-                tooltipData.diary.mood === 'terrible' ? 'bg-red-100 text-red-700' :
-                'bg-gray-100 text-gray-700'
-              }`}>
-                {tooltipData.diary.mood === 'great' ? '😊' :
-                 tooltipData.diary.mood === 'good' ? '🙂' :
-                 tooltipData.diary.mood === 'neutral' ? '😐' :
-                 tooltipData.diary.mood === 'bad' ? '😕' :
-                 tooltipData.diary.mood === 'terrible' ? '😢' : '😐'}
-              </span>
-            )}
-          </div>
-
-          {/* 일기 제목 */}
-          <h4 className="font-medium text-gray-900 mb-2 text-sm line-clamp-1">
-            {tooltipData.diary?.title || '제목 없음'}
-          </h4>
-
-          {/* 일기 내용 미리보기 */}
-          <p className="text-xs text-gray-600 mb-3 line-clamp-3">
-            {tooltipData.diary?.content || '내용 없음'}
-          </p>
-
-          {/* 사진 썸네일 */}
-          {tooltipData.diary?.photos && tooltipData.diary.photos.length > 0 && (
-            <div className="mb-3">
-              <div className="flex gap-1 mb-1">
-                {tooltipData.diary.photos.slice(0, 3).map((photo: string, index: number) => (
-                  <img
-                    key={index}
-                    src={photo}
-                    alt=""
-                    className="w-12 h-12 object-cover rounded border"
-                  />
-                ))}
-                {tooltipData.diary.photos.length > 3 && (
-                  <div className="w-12 h-12 bg-gray-100 rounded border flex items-center justify-center">
-                    <span className="text-xs text-gray-500">+{tooltipData.diary.photos.length - 3}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 메타 정보 */}
-          <div className="flex items-center justify-between text-xs text-gray-500">
-            <span>{tooltipData.diary?.wordCount || 0}자</span>
-            {tooltipData.diary?.tags && tooltipData.diary.tags.length > 0 && (
-              <div className="flex gap-1">
-                {tooltipData.diary.tags.slice(0, 2).map((tag: string, index: number) => (
-                  <span key={index} className="px-1 py-0.5 bg-gray-100 rounded text-xs">
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 클릭 안내 */}
-          <div className="mt-2 pt-2 border-t border-gray-100">
-            <div className="text-xs text-blue-600">클릭하여 자세히 보기 →</div>
-          </div>
-        </div>
-      )}
-
-      {/* 툴팁 로딩 표시 */}
-      {isLoadingTooltip && hoveredDate && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40 bg-white rounded-lg shadow-lg border border-gray-200 p-2">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-xs text-gray-600">일기 로딩 중...</span>
-          </div>
-        </div>
-      )}
 
       {/* 2D 타임라인 그리드 */}
       <div
@@ -740,10 +591,7 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={() => {
-          handleMouseUp()
-          handleDateMouseLeave()
-        }}
+        onMouseLeave={handleMouseUp}
         onWheel={handleWheel}
         style={{
           transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
@@ -821,10 +669,13 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
                     }
 
                     const isSelected = isDateSelected(date)
-                    const hasData = hasDataForDate(date)
+                    const hasData = hasDataForDateOptimized(date)
                     const isToday = isSameDay(date, new Date())
                     const isWeekend = date.getDay() === 0 || date.getDay() === 6
-                    const isHovered = hoveredDate && isSameDay(hoveredDate, date)
+                    
+                    const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+                    const diary = hasData ? getDiaryOptimized(date) : null
+                    const showContent = cellSize >= 20
                     
                     return (
                       <div
@@ -834,9 +685,7 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
                           isSelected
                             ? 'bg-primary-600 border-primary-700 shadow-md z-30'
                             : hasData
-                            ? isHovered
-                              ? 'bg-primary-400 border-primary-500 shadow-md z-20'
-                              : 'bg-primary-200 hover:bg-primary-300 border-primary-300'
+                            ? 'bg-primary-200 hover:bg-primary-300 border-primary-300'
                             : isToday
                             ? 'bg-yellow-400 hover:bg-yellow-500 border-yellow-500 shadow-sm'
                             : isWeekend
@@ -848,32 +697,33 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
                           height: `${cellSize}px`,
                           marginRight: `${gapSize}px`,
                         }}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDateClick(date)
-                        }}
-                        onMouseEnter={(e) => {
-                          e.stopPropagation()
-                          handleDateMouseEnter(date, e)
-                        }}
-                        onMouseLeave={(e) => {
-                          e.stopPropagation()
-                          handleDateMouseLeave()
-                        }}
-                        title={hasData ? '' : `${format(date, 'yyyy년 MM월 dd일')}`}
-                        data-date={format(date, 'yyyy-MM-dd')} // 디버깅용 데이터 속성
-                        data-has-data={hasData.toString()} // 디버깅용 데이터 속성
+                        onClick={() => handleDateClick(date)}
+                        title={`${format(date, 'yyyy년 MM월 dd일')}${diary ? ` - ${diary.title}` : ''}`}
                       >
-                        {/* 큰 줌에서만 날짜 표시 */}
-                        {cellSize >= 20 && (
-                          <div className="p-1 text-[8px] text-gray-600 font-medium">
-                            {format(date, 'd')}
+                        {/* 큰 줌에서 내용 표시 */}
+                        {showContent && diary && (
+                          <div className="p-1 w-full h-full text-xs leading-tight">
+                            <div className="font-medium text-gray-900 truncate text-[8px] mb-1">
+                              {diary.title}
+                            </div>
+                            {cellSize >= 30 && diary?.content && (
+                              <div className="text-gray-700 text-[6px] leading-none overflow-hidden">
+                                {diary.content.substring(0, Math.floor(cellSize / 3))}
+                              </div>
+                            )}
+                            {cellSize >= 25 && diary.mood && (
+                              <div className="absolute bottom-0 right-0 text-[8px]">
+                                {{'great': '😊', 'good': '😌', 'neutral': '😐', 'bad': '😞', 'terrible': '😢'}[diary.mood]}
+                              </div>
+                            )}
                           </div>
                         )}
                         
-                        {/* 일기 있음 표시 */}
-                        {hasData && cellSize >= 16 && (
-                          <div className="absolute bottom-0 right-0 w-2 h-2 bg-blue-500 rounded-full"></div>
+                        {/* 작은 줌에서는 날짜만 표시 */}
+                        {showContent && !diary && cellSize >= 20 && (
+                          <div className="p-1 text-[8px] text-gray-600 font-medium">
+                            {format(date, 'd')}
+                          </div>
                         )}
                       </div>
                     )
@@ -908,10 +758,10 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
         </div>
         <div className="mt-2 pt-2 border-t border-gray-200">
           <div className="text-xs text-gray-500">
-            ✨ 호버 툴팁 추가!<br/>
-            📊 API 호출 97% 감소<br/>
-            🚀 메모리 사용량 70% 절약<br/>
-            ⚡ 반응성 3배 향상
+            🚀 단일 쿼리로 연도 전체 로딩<br/>
+            ⚡ 366개 → 1개 API 호출로 성능 혁신<br/>
+            💾 스마트 캐싱 + 선택적 프리로딩<br/>
+            🔄 가시 영역 자동 데이터 로딩
           </div>
         </div>
       </div>

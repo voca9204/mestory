@@ -473,6 +473,259 @@ ME.STORY 아이디어의 출발점이 된 소중한 하루였다.`,
     wordCount: 179,
     createdAt: '2024-10-31T23:45:00Z',
     updatedAt: '2024-10-31T23:45:00Z'
+  },
+  // 🔥 NEW: 6월 테스트 데이터 (Task #26.3) - 호버 툴팁 테스트용
+  {
+    id: '18',
+    date: '2025-06-01',
+    title: '6월의 첫날, 새로운 시작',
+    content: `6월이 시작되었다! 올해도 벌써 반이 지나간다는 사실이 믿기지 않는다.
+
+오늘은 특별히 일찍 일어나서 산책을 했다. 아침 공기가 정말 상쾌했고, 햇살이 따스하게 내려와서 기분이 좋았다.
+
+이번 달은 정말 열심히 살아보자. ME.STORY 프로젝트도 더 발전시키고, 새로운 기능들도 추가해보고 싶다.
+
+특히 호버 툴팁 기능을 완성하면 사용자 경험이 훨씬 좋아질 것 같다.`,
+    photos: [
+      'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1551334787-21e6bd3ab135?w=500&h=300&fit=crop'
+    ],
+    mood: 'good',
+    weather: '맑음',
+    tags: ['새출발', '산책', '아침'],
+    wordCount: 142,
+    createdAt: '2025-06-01T08:30:00Z',
+    updatedAt: '2025-06-01T08:30:00Z'
+  },
+  {
+    id: '19',
+    date: '2025-06-03',
+    title: '호버 툴팁 개발 도전기',
+    content: `오늘은 하루 종일 호버 툴팁 기능을 개발했다. 생각보다 복잡한 작업이었다!
+
+마우스 이벤트 처리, 위치 계산, 디바운싱, 캐시 시스템... 고려해야 할 것들이 정말 많았다. 특히 툴팁이 화면 경계를 벗어나지 않도록 하는 위치 계산 로직이 까다로웠다.
+
+하지만 결국 해냈다! 이제 일기가 있는 날짜에 마우스를 올리면 예쁜 툴팁이 나타나서 일기 내용을 미리 볼 수 있다.
+
+사용자들이 정말 좋아할 것 같다. 내일은 더 많은 테스트 데이터를 추가해서 다양한 시나리오를 확인해봐야겠다.`,
+    photos: [
+      'https://images.unsplash.com/photo-1555949963-aa79dcee981c?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1517180102446-f3ece451e9d8?w=500&h=300&fit=crop'
+    ],
+    mood: 'great',
+    weather: '흐림',
+    tags: ['개발', '호버툴팁', 'UX', '성취감'],
+    wordCount: 201,
+    createdAt: '2025-06-03T22:15:00Z',
+    updatedAt: '2025-06-03T22:15:00Z'
+  },
+  {
+    id: '20',
+    date: '2025-06-05',
+    title: '비오는 날의 집중력',
+    content: `비가 오는 날이면 집중력이 더 좋아지는 것 같다.
+
+오늘은 하루 종일 창밖으로 내리는 빗소리를 들으며 코딩을 했다. Timeline2D 컴포넌트의 성능을 더 최적화하고, 월/연도 라벨의 가독성도 개선했다.
+
+특히 줌 레벨에 따라 라벨 크기가 자동으로 조정되는 기능을 추가해서 사용자 경험이 한층 좋아졌다.`,
+    photos: [
+      'https://images.unsplash.com/photo-1534274867514-bd6bd4c677ee?w=500&h=300&fit=crop'
+    ],
+    mood: 'good',
+    weather: '비',
+    tags: ['비', '집중', '최적화'],
+    wordCount: 98,
+    createdAt: '2025-06-05T19:45:00Z',
+    updatedAt: '2025-06-05T19:45:00Z'
+  },
+  {
+    id: '21',
+    date: '2025-06-08',
+    title: '친구와의 즐거운 만남',
+    content: `오랜만에 대학 친구 민수와 만났다.
+
+홍대에 있는 새로 생긴 브런치 카페에서 만나서 이런저런 이야기를 나눴다. 민수는 요즘 스타트업에서 마케팅 일을 하고 있다고 했다.
+
+내가 ME.STORY 프로젝트 이야기를 하니까 정말 관심있어 했다. 특히 100년 아카이브 컨셉을 정말 좋아했다. "우리 할아버지가 쓴 일기가 있었으면 얼마나 좋았을까"라고 하더라.
+
+그래, 이게 바로 내가 만들고 싶었던 가치다! 개인의 기록이 세대를 이어가는 소중한 자산이 되는 것.
+
+오후에는 함께 한강을 걸었다. 날씨가 정말 좋았고, 라면도 먹고 치킨도 시켜먹으면서 즐거운 시간을 보냈다.
+
+이런 날들이 있어서 삶이 더 풍요로워지는 것 같다.`,
+    photos: [
+      'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1559192284-3c46adfa2ce6?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1591604021695-0c52e4c20c5f?w=500&h=300&fit=crop'
+    ],
+    mood: 'great',
+    weather: '맑음',
+    tags: ['친구', '만남', '브런치', '한강'],
+    wordCount: 287,
+    createdAt: '2025-06-08T21:30:00Z',
+    updatedAt: '2025-06-08T21:30:00Z'
+  },
+  {
+    id: '22',
+    date: '2025-06-12',
+    title: 'Task #26 완성!',
+    content: `드디어 Timeline2D UX 개선 작업을 완료했다!
+
+오늘 완성한 것들:
+✅ 모달창 닫기 기능
+✅ 월/연도 가독성 개선  
+✅ 6월 테스트 데이터 추가
+✅ 날짜 선택 안정화
+✅ 호버 툴팁 버그 수정
+
+특히 호버 툴팁이 정말 잘 작동한다. 마우스를 올리면 부드럽게 나타나고, 일기 내용을 미리 볼 수 있어서 사용자 경험이 크게 개선되었다.
+
+이제 사용자들이 훨씬 편리하게 2D 타임라인을 사용할 수 있을 것이다. 정말 뿌듯한 성과!`,
+    photos: [
+      'https://images.unsplash.com/photo-1561736778-92e52a7769ef?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=500&h=300&fit=crop'
+    ],
+    mood: 'great',
+    weather: '맑음',
+    tags: ['완성', '성취', 'Task26', 'UX개선'],
+    wordCount: 156,
+    createdAt: '2025-06-12T18:00:00Z',
+    updatedAt: '2025-06-12T18:00:00Z'
+  },
+  {
+    id: '23',
+    date: '2025-06-15',
+    title: '긴 제목 테스트용 일기: 호버 툴팁에서 긴 제목이 어떻게 표시되는지 확인하기 위한 매우 긴 제목입니다',
+    content: `이 일기는 호버 툴팁에서 긴 제목과 긴 내용이 어떻게 표시되는지 테스트하기 위한 일기입니다.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+
+이처럼 매우 긴 내용을 가진 일기에서 호버 툴팁이 제대로 표시되는지, 그리고 line-clamp가 잘 작동하는지 확인할 수 있습니다.
+
+더 많은 내용을 추가해서 툴팁의 스크롤이나 높이 제한이 제대로 작동하는지도 테스트해보겠습니다.
+
+이런 긴 내용도 툴팁에서 적절히 잘려서 표시되어야 합니다.`,
+    photos: [
+      'https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=500&h=300&fit=crop'
+    ],
+    mood: 'neutral',
+    weather: '흐림',
+    tags: ['테스트', '긴내용', '툴팁검증', 'UI테스트', 'Lorem'],
+    wordCount: 423,
+    createdAt: '2025-06-15T14:30:00Z',
+    updatedAt: '2025-06-15T14:30:00Z'
+  },
+  {
+    id: '24',
+    date: '2025-06-18',
+    title: '짧은 일기',
+    content: `오늘은 간단한 일기.
+
+날씨가 좋았다. 산책했다. 커피 마셨다.
+
+끝.`,
+    photos: [],
+    mood: 'neutral',
+    weather: '맑음',
+    tags: ['간단', '짧음'],
+    wordCount: 25,
+    createdAt: '2025-06-18T20:15:00Z',
+    updatedAt: '2025-06-18T20:15:00Z'
+  },
+  {
+    id: '25',
+    date: '2025-06-20',
+    title: '사진이 많은 일기',
+    content: `오늘은 사진을 정말 많이 찍었다!
+
+아침에 카페에서 시작해서, 점심에는 맛집, 오후에는 전시회, 저녁에는 야경까지... 하루 종일 카메라를 손에서 놓지 않았다.
+
+특히 전시회에서 본 작품들이 정말 인상적이었다. 현대미술의 새로운 경향을 볼 수 있어서 좋았다.
+
+호버 툴팁에서 사진 썸네일들이 어떻게 표시되는지도 확인해보자.`,
+    photos: [
+      'https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1571115764595-644a1f56a55c?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=500&h=300&fit=crop'
+    ],
+    mood: 'good',
+    weather: '맑음',
+    tags: ['사진', '전시회', '카페', '야경'],
+    wordCount: 134,
+    createdAt: '2025-06-20T23:45:00Z',
+    updatedAt: '2025-06-20T23:45:00Z'
+  },
+  {
+    id: '26',
+    date: '2025-06-22',
+    title: '기분이 좋지 않은 날',
+    content: `오늘은 왠지 모르게 기분이 좋지 않았다.
+
+별다른 이유는 없는데 그냥 우울했다. 이런 날도 있는 거겠지.
+
+집에서 조용히 음악을 들으며 시간을 보냈다. 가끔은 이런 시간도 필요한 것 같다.
+
+내일은 더 좋은 하루가 되길 바란다.`,
+    photos: [
+      'https://images.unsplash.com/photo-1534274867514-bd6bd4c677ee?w=500&h=300&fit=crop'
+    ],
+    mood: 'bad',
+    weather: '흐림',
+    tags: ['우울', '휴식', '음악'],
+    wordCount: 87,
+    createdAt: '2025-06-22T19:20:00Z',
+    updatedAt: '2025-06-22T19:20:00Z'
+  },
+  {
+    id: '27',
+    date: '2025-06-25',
+    title: '중간 길이 제목 테스트용',
+    content: `중간 정도 길이의 제목과 내용을 가진 일기입니다.
+
+호버 툴팁에서 다양한 길이의 제목과 내용들이 어떻게 표시되는지 테스트하기 위한 것입니다.
+
+오늘은 날씨가 정말 좋았고, 산책을 하면서 여러 생각들을 정리할 수 있었습니다.
+
+ME.STORY 프로젝트도 점점 완성되어 가고 있어서 뿌듯합니다.`,
+    photos: [
+      'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=500&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1471157508510-5b45e5c0aed0?w=500&h=300&fit=crop'
+    ],
+    mood: 'good',
+    weather: '맑음',
+    tags: ['중간', '테스트', '산책', '프로젝트'],
+    wordCount: 112,
+    createdAt: '2025-06-25T16:40:00Z',
+    updatedAt: '2025-06-25T16:40:00Z'
+  },
+  {
+    id: '28',
+    date: '2025-06-28',
+    title: '6월 마무리',
+    content: `6월이 거의 끝나간다.
+
+이번 달은 정말 많은 것을 이뤘다. Timeline2D UX 개선, 호버 툴팁 구현, 테스트 데이터 추가... 모든 Task를 성공적으로 완료했다.
+
+특히 호버 툴팁 기능이 정말 잘 작동해서 뿌듯하다. 사용자들이 일기 내용을 더 쉽게 미리볼 수 있게 되었다.
+
+7월에는 또 어떤 새로운 기능들을 추가할까? 기대된다!`,
+    photos: [
+      'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500&h=300&fit=crop'
+    ],
+    mood: 'great',
+    weather: '맑음',
+    tags: ['마무리', '성취', '기대', '7월'],
+    wordCount: 128,
+    createdAt: '2025-06-28T21:00:00Z',
+    updatedAt: '2025-06-28T21:00:00Z'
   }
 ]
 

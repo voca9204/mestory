@@ -1,5 +1,6 @@
 // 일기 조회를 위한 통합 인터페이스
 import { DiaryEntry } from '../services/diaryService';
+import { MissionProgress } from './missions';
 
 export interface UnifiedDiaryEntry {
   id: string;
@@ -13,6 +14,7 @@ export interface UnifiedDiaryEntry {
   createdAt: Date;
   updatedAt?: Date;
   userId?: string;
+  missions?: MissionProgress[];
 }
 
 export interface DataProviderInterface {

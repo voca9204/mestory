@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Timeline2D } from '../components/Timeline2D'
 import { TableTimeline } from '../components/TableTimeline'
@@ -10,58 +10,36 @@ import { format } from 'date-fns'
 export function TimelinePage() {
   const navigate = useNavigate()
   const { getDiaryByDate, getContextByDate } = useData()
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date()) // 오늘 날짜로 초기화
   const [viewMode, setViewMode] = useState<ViewMode>('table')
   const [selectedDiary, setSelectedDiary] = useState<any>(null)
   const [selectedContext, setSelectedContext] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState(false)
 
-  // 🚀 최적화: 날짜 문자열을 메모화
-  const selectedDateString = useMemo(() => {
-    return selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null
-  }, [selectedDate])
-
-  // 🚀 최적화: 디바운스된 데이터 로딩
-  const loadDateData = useCallback(async (dateString: string) => {
-    if (isLoading) return // 이미 로딩 중이면 스킵
-    
-    setIsLoading(true)
-    try {
-      // 🔥 개선: Promise.resolve 제거, 순차 실행으로 변경
-      const diary = await getDiaryByDate(dateString)
-      const context = getContextByDate(dateString) // 동기 함수이므로 await 불필요
-      
-      setSelectedDiary(diary)
-      setSelectedContext(context)
-    } catch (error) {
-      console.error('날짜 데이터 로드 실패:', error)
-      setSelectedDiary(null)
-      setSelectedContext(null)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [getDiaryByDate, getContextByDate, isLoading])
-
-  // 🚀 최적화: 디바운스된 useEffect
+  // 선택된 날짜가 변경될 때마다 해당 날짜의 데이터 로드
   useEffect(() => {
-    if (!selectedDateString) {
-      setSelectedDiary(null)
-      setSelectedContext(null)
-      return
+    const loadDateData = async () => {
+      if (selectedDate) {
+        const dateString = format(selectedDate, 'yyyy-MM-dd')
+        try {
+          const [diary, context] = await Promise.all([
+            getDiaryByDate(dateString),
+            Promise.resolve(getContextByDate(dateString)) // getContextByDate는 sync 함수
+          ])
+          setSelectedDiary(diary)
+          setSelectedContext(context)
+        } catch (error) {
+          console.error('날짜 데이터 로드 실패:', error)
+          setSelectedDiary(null)
+          setSelectedContext(null)
+        }
+      } else {
+        setSelectedDiary(null)
+        setSelectedContext(null)
+      }
     }
-
-    // 300ms 디바운스 적용
-    const timer = setTimeout(() => {
-      loadDateData(selectedDateString)
-    }, 300)
     
-    return () => clearTimeout(timer)
-  }, [selectedDateString, loadDateData])
-
-  // 🚀 최적화: 네비게이션 핸들러 메모화
-  const handleDiaryNavigation = useCallback((diary: any) => {
-    navigate(`/diary/${diary.date}`)
-  }, [navigate])
+    loadDateData()
+  }, [selectedDate, getDiaryByDate, getContextByDate])
 
   return (
     <div className="max-w-full">
@@ -119,14 +97,7 @@ export function TimelinePage() {
                 weekday: 'long'
               })}
             </h2>
-            {/* 🚀 로딩 상태 표시 */}
-            {isLoading && (
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-xs text-gray-500">로딩 중...</span>
-              </div>
-            )}
-            {selectedDiary && !isLoading && (
+            {selectedDiary && (
               <span className={`text-xs px-3 py-1 rounded-full ${
                 selectedDiary.mood === 'great' ? 'bg-green-100 text-green-700' :
                 selectedDiary.mood === 'good' ? 'bg-blue-100 text-blue-700' :
@@ -149,7 +120,7 @@ export function TimelinePage() {
             <div>
               <h3 className="font-medium text-gray-900 mb-3">개인 기록</h3>
               <div className="space-y-3">
-                {selectedDiary && !isLoading ? (
+                {selectedDiary ? (
                   <div className="bg-gray-50 rounded-lg p-4">
                     <div className="flex justify-between items-start mb-2">
                       <h4 className="font-medium text-gray-900">{selectedDiary.title}</h4>
@@ -161,11 +132,11 @@ export function TimelinePage() {
                     <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-3">
                         <span className="text-gray-600">
-                          사진: <span className="font-medium">{selectedDiary.photos?.length || 0}장</span>
+                          사진: <span className="font-medium">{selectedDiary.photos.length}장</span>
                         </span>
-                        {selectedDiary.tags?.length > 0 && (
+                        {selectedDiary.tags.length > 0 && (
                           <div className="flex gap-1">
-                            {selectedDiary.tags.slice(0, 2).map((tag: string, index: number) => (
+                            {selectedDiary.tags.slice(0, 2).map((tag, index) => (
                               <span key={index} className="px-2 py-1 bg-primary-100 text-primary-700 rounded text-xs">
                                 #{tag}
                               </span>
@@ -174,18 +145,12 @@ export function TimelinePage() {
                         )}
                       </div>
                       <button 
-                        onClick={() => handleDiaryNavigation(selectedDiary)}
+                        onClick={() => navigate(`/diary/${selectedDiary.date}`)}
                         className="text-primary-600 hover:text-primary-700 font-medium transition-colors"
                       >
                         자세히 보기 →
                       </button>
                     </div>
-                  </div>
-                ) : isLoading ? (
-                  <div className="bg-gray-50 rounded-lg p-4 animate-pulse">
-                    <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                    <div className="h-12 bg-gray-200 rounded mb-3"></div>
-                    <div className="h-6 bg-gray-200 rounded"></div>
                   </div>
                 ) : (
                   <div className="space-y-2 text-sm">
@@ -210,49 +175,40 @@ export function TimelinePage() {
             <div>
               <h3 className="font-medium text-gray-900 mb-3">맥락 정보</h3>
               <div className="space-y-3">
-                {selectedContext && !isLoading ? (
+                {selectedContext ? (
                   <>
                     <div className="bg-blue-50 rounded-lg p-3">
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-sm font-medium text-gray-700">날씨</span>
-                        <span className="text-xs text-blue-600">{selectedContext.weather?.condition}</span>
+                        <span className="text-xs text-blue-600">{selectedContext.weather.condition}</span>
                       </div>
                       <div className="text-sm text-gray-600">
-                        {selectedContext.weather?.temperature}°C, 습도 {selectedContext.weather?.humidity}%
+                        {selectedContext.weather.temperature}°C, 습도 {selectedContext.weather.humidity}%
                       </div>
                     </div>
                     
-                    {selectedContext.news?.length > 0 && (
+                    {selectedContext.news.length > 0 && (
                       <div className="bg-yellow-50 rounded-lg p-3">
                         <div className="text-sm font-medium text-gray-700 mb-2">주요 뉴스</div>
                         <ul className="text-sm text-gray-600 space-y-1">
-                          {selectedContext.news.slice(0, 2).map((news: string, index: number) => (
+                          {selectedContext.news.slice(0, 2).map((news, index) => (
                             <li key={index} className="text-xs">• {news}</li>
                           ))}
                         </ul>
                       </div>
                     )}
 
-                    {selectedContext.events?.length > 0 && (
+                    {selectedContext.events.length > 0 && (
                       <div className="bg-purple-50 rounded-lg p-3">
                         <div className="text-sm font-medium text-gray-700 mb-2">특별한 일</div>
                         <ul className="text-sm text-gray-600 space-y-1">
-                          {selectedContext.events.map((event: string, index: number) => (
+                          {selectedContext.events.map((event, index) => (
                             <li key={index} className="text-xs">🎉 {event}</li>
                           ))}
                         </ul>
                       </div>
                     )}
                   </>
-                ) : isLoading ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3].map((_, index) => (
-                      <div key={index} className="bg-gray-50 rounded-lg p-3 animate-pulse">
-                        <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                        <div className="h-6 bg-gray-200 rounded"></div>
-                      </div>
-                    ))}
-                  </div>
                 ) : (
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
@@ -270,19 +226,6 @@ export function TimelinePage() {
           </div>
         </div>
       )}
-
-      {/* 🚀 성능 정보 패널 */}
-      <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-green-600 font-medium">🚀 TimelinePage 최적화 완료</span>
-        </div>
-        <div className="text-sm text-green-700">
-          • 디바운스된 데이터 로딩 (300ms)<br/>
-          • 불필요한 Promise.resolve 제거<br/>
-          • 메모화된 계산 및 핸들러<br/>
-          • 로딩 상태 표시 개선
-        </div>
-      </div>
     </div>
   )
 }

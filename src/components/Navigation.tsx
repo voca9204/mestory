@@ -7,14 +7,16 @@ import {
   CogIcon,
   ChartBarIcon,
   UserCircleIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  TrophyIcon
 } from '@heroicons/react/24/outline'
 import {
   HomeIcon as HomeIconSolid,
   CalendarIcon as CalendarIconSolid,
   BookOpenIcon as BookOpenIconSolid,
   CogIcon as CogIconSolid,
-  ChartBarIcon as ChartBarIconSolid
+  ChartBarIcon as ChartBarIconSolid,
+  TrophyIcon as TrophyIconSolid
 } from '@heroicons/react/24/solid'
 import { useAuth } from '../contexts/AuthContext'
 import { logOut, signInWithGoogle } from '../services/auth'
@@ -23,6 +25,7 @@ const navigationItems = [
   { name: '홈', href: '/', icon: HomeIcon, activeIcon: HomeIconSolid },
   { name: '타임라인', href: '/timeline', icon: CalendarIcon, activeIcon: CalendarIconSolid },
   { name: '일기', href: '/diary', icon: BookOpenIcon, activeIcon: BookOpenIconSolid },
+  { name: '미션', href: '/missions', icon: TrophyIcon, activeIcon: TrophyIconSolid },
   { name: '분석', href: '/analytics', icon: ChartBarIcon, activeIcon: ChartBarIconSolid },
   { name: '설정', href: '/settings', icon: CogIcon, activeIcon: CogIconSolid },
 ]
