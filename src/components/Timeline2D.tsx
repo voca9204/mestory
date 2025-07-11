@@ -1,148 +1,61 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { format, startOfYear, endOfYear, eachDayOfInterval, isSameDay, getDayOfYear } from 'date-fns'
 import { useData } from '../contexts/DataContext'
-
-interface Timeline2DProps {
-  selectedDate: Date | null
-  onDateSelect: (date: Date) => void
-}
-
-interface TooltipData {
-  date: Date
-  diary: any
-  position: { x: number, y: number }
-}
-
+import { Timeline2DProps, TooltipData, DragState, Offset } from './Timeline2DTypes'
+import { Timeline2DTooltip } from './Timeline2DTooltip'
+import { Timeline2DLegend } from './Timeline2DLegend'
+import { Timeline2DControls } from './Timeline2DControls'
+import { Timeline2DHeader } from './Timeline2DHeader'
+import { Timeline2DDateCell } from './Timeline2DDateCell'
+import { Timeline2DUsageGuide } from './Timeline2DUsageGuide'
+import { Timeline2DYearIndicator } from './Timeline2DYearIndicator'
+import { Timeline2DSelectedInfo } from './Timeline2DSelectedInfo'
+import { Timeline2DLoadingIndicator } from './Timeline2DLoadingIndicator'
+import { useTimeline2DData } from './useTimeline2DData'
+import { 
+  calculateTooltipPosition, 
+  getMonthBoundaries, 
+  isWeekend,
+  DEFAULT_GRID_CONFIG,
+  NAVIGATION,
+  CANVAS_CONFIG 
+} from './Timeline2DUtils'
 export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
-  const { isUsingMockData, getDatesWithData, getDiaryByDate } = useData()
+  const { isUsingMockData } = useData()
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [scale, setScale] = useState(2)
-  const [dragState, setDragState] = useState({ isDragging: false, lastX: 0, lastY: 0 })
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
+  const [dragState, setDragState] = useState<DragState>({ isDragging: false, lastX: 0, lastY: 0 })
+  const [offset, setOffset] = useState<Offset>({ x: 0, y: 0 })
   const [isInitialized, setIsInitialized] = useState(false)
   
-  // 🚀 단순화된 캐시 - 성능 최적화
-  const [yearDataCache, setYearDataCache] = useState<Map<number, Set<string>>>(new Map())
-  const [loadingYears, setLoadingYears] = useState<Set<number>>(new Set())
+  const {
+    yearDataCache,
+    loadingYears,
+    hasDataForDate,
+    loadDiaryForTooltip,
+    loadVisibleYears,
+    loadYearData,
+    clearCache
+  } = useTimeline2DData()
   
-  // 🎯 NEW: 호버 툴팁 상태
   const [tooltipData, setTooltipData] = useState<TooltipData | null>(null)
   const [isLoadingTooltip, setIsLoadingTooltip] = useState(false)
   const [hoveredDate, setHoveredDate] = useState<Date | null>(null)
   const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const diaryCache = useRef<Map<string, any>>(new Map())
   
   const containerRef = useRef<HTMLDivElement>(null)
   const todayCellRef = useRef<HTMLDivElement>(null)
-
-  // 그리드 설정
-  const cellSize = 12 * scale
-  const gapSize = 1
-  const monthLabels = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12']
-
-  // 연도 범위 설정
+  const cellSize = DEFAULT_GRID_CONFIG.cellSize * scale
+  const gapSize = DEFAULT_GRID_CONFIG.gapSize
+  const monthLabels = DEFAULT_GRID_CONFIG.monthLabels
   const currentYearNum = new Date().getFullYear()
   const years = useMemo(() => {
     const startYear = currentYearNum - 5
     const endYear = currentYearNum + 10
     return Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i)
   }, [currentYearNum])
-
-  const maxDaysInYear = 366
+  const maxDaysInYear = DEFAULT_GRID_CONFIG.maxDaysInYear
   const [isAnimating, setIsAnimating] = useState(false)
-
-  // 🚀 최적화된 연도 데이터 로딩 - 단일 API 호출
-  const loadYearData = useCallback(async (year: number) => {
-    if (yearDataCache.has(year) || loadingYears.has(year)) {
-      return // 이미 로딩됐거나 로딩 중이면 스킵
-    }
-
-    console.log(`📅 Loading data for year ${year}...`)
-    setLoadingYears(prev => new Set(prev).add(year))
-    
-    try {
-      const startDate = `${year}-01-01`
-      const endDate = `${year}-12-31`
-      
-      // 🔥 핵심 개선: 단일 API 호출로 연도 전체 데이터 가져오기
-      const datesWithData = await getDatesWithData(startDate, endDate)
-      
-      // Set으로 변환해서 빠른 검색 가능
-      const dateSet = new Set(datesWithData)
-      
-      // 캐시에 저장
-      setYearDataCache(prev => new Map(prev).set(year, dateSet))
-      
-      console.log(`✅ Year ${year}: Found ${datesWithData.length} dates with data`)
-    } catch (error) {
-      console.error(`❌ Error loading year ${year}:`, error)
-    } finally {
-      setLoadingYears(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(year)
-        return newSet
-      })
-    }
-  }, [getDatesWithData, yearDataCache, loadingYears])
-
-  // 🚀 최적화된 데이터 존재 여부 확인
-  const hasDataForDate = useCallback((date: Date): boolean => {
-    const year = date.getFullYear()
-    const dateString = `${year}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-    
-    const yearData = yearDataCache.get(year)
-    if (yearData) {
-      return yearData.has(dateString)
-    }
-    
-    // 데이터가 없으면 로딩 시작 (비동기)
-    if (!loadingYears.has(year)) {
-      loadYearData(year)
-    }
-    
-    return false
-  }, [yearDataCache, loadingYears, loadYearData])
-
-  // 🎯 NEW: 툴팁용 일기 데이터 로딩
-  const loadDiaryForTooltip = useCallback(async (date: Date, mousePosition: { x: number, y: number }) => {
-    const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-    
-    // 캐시에서 먼저 확인
-    if (diaryCache.current.has(dateString)) {
-      const diary = diaryCache.current.get(dateString)
-      setTooltipData({
-        date,
-        diary,
-        position: mousePosition
-      })
-      return
-    }
-
-    setIsLoadingTooltip(true)
-    try {
-      const diary = await getDiaryByDate(dateString)
-      
-      if (diary) {
-        // 캐시에 저장
-        diaryCache.current.set(dateString, diary)
-        
-        // 아직 같은 날짜에 호버하고 있으면 툴팁 표시
-        if (hoveredDate && isSameDay(hoveredDate, date)) {
-          setTooltipData({
-            date,
-            diary,
-            position: mousePosition
-          })
-        }
-      }
-    } catch (error) {
-      console.error('일기 로딩 실패:', error)
-    } finally {
-      setIsLoadingTooltip(false)
-    }
-  }, [getDiaryByDate, hoveredDate])
-
-  // 🎯 NEW: 마우스 호버 핸들러
   const handleDateMouseEnter = useCallback((date: Date, event: React.MouseEvent) => {
     const hasData = hasDataForDate(date)
     const isDragging = dragState.isDragging
@@ -157,7 +70,6 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     if (tooltipTimeoutRef.current) {
       clearTimeout(tooltipTimeoutRef.current)
     }
-
     // 마우스 위치 계산 (컨테이너 기준, 스케일과 오프셋 고려)
     if (containerRef.current) {
       const containerRect = containerRef.current.getBoundingClientRect()
@@ -165,22 +77,32 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
         x: event.clientX - containerRect.left,
         y: event.clientY - containerRect.top
       }
-
       console.log('🖱️ 마우스 이벤트:', {
         날짜: format(date, 'M/d'), 
         마우스좌표: `(${event.clientX}, ${event.clientY})`,
         컨테이너좌표: `(${mousePosition.x}, ${mousePosition.y})`,
         일기있음: hasData
       })
-
       // 300ms 후에 툴팁 표시 (디바운스)
-      tooltipTimeoutRef.current = setTimeout(() => {
-        loadDiaryForTooltip(date, mousePosition)
+      tooltipTimeoutRef.current = setTimeout(async () => {
+        setIsLoadingTooltip(true)
+        try {
+          const diary = await loadDiaryForTooltip(date)
+          if (hoveredDate && isSameDay(hoveredDate, date)) {
+            setTooltipData({
+              date,
+              diary,
+              position: mousePosition
+            })
+          }
+        } catch (error) {
+          console.error('일기 로딩 실패:', error)
+        } finally {
+          setIsLoadingTooltip(false)
+        }
       }, 300)
     }
   }, [hasDataForDate, dragState.isDragging, loadDiaryForTooltip])
-
-  // 🎯 NEW: 마우스 떠남 핸들러
   const handleDateMouseLeave = useCallback(() => {
     setHoveredDate(null)
     setTooltipData(null)
@@ -190,10 +112,8 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
       tooltipTimeoutRef.current = null
     }
   }, [])
-
-  // 🚀 가시 영역 연도들만 로딩
-  const loadVisibleYears = useCallback(() => {
-    if (!containerRef.current) return
+  const calculateVisibleYears = useCallback(() => {
+    if (!containerRef.current) return []
     
     const containerRect = containerRef.current.getBoundingClientRect()
     const containerHeight = containerRect.height
@@ -208,25 +128,23 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     const startYearIndex = Math.max(0, Math.floor((topY - padding - headerHeight) / yearRowHeight) - 1)
     const endYearIndex = Math.min(years.length - 1, Math.ceil((bottomY - padding - headerHeight) / yearRowHeight) + 1)
     
-    // 가시 영역의 연도들만 로딩
+    // 가시 영역의 연도들 반환
+    const visibleYears = []
     for (let i = startYearIndex; i <= endYearIndex; i++) {
       if (i >= 0 && i < years.length) {
-        const year = years[i]
-        loadYearData(year)
+        visibleYears.push(years[i])
       }
     }
-  }, [offset.y, scale, cellSize, gapSize, years, loadYearData])
-
-  // 🚀 디바운스된 가시 영역 로딩
+    return visibleYears
+  }, [offset.y, scale, cellSize, gapSize, years])
   useEffect(() => {
     const timer = setTimeout(() => {
-      loadVisibleYears()
+      const visibleYears = calculateVisibleYears()
+      loadVisibleYears(visibleYears)
     }, 200) // 200ms 디바운스
     
     return () => clearTimeout(timer)
-  }, [offset, scale]) // loadVisibleYears 의존성 제거로 무한 루프 방지
-
-  // 초기 로드
+  }, [offset, scale, calculateVisibleYears, loadVisibleYears])
   useEffect(() => {
     if (isInitialized) {
       const currentYearNum = new Date().getFullYear()
@@ -234,8 +152,6 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
       loadYearData(currentYearNum)
     }
   }, [isInitialized, loadYearData])
-
-  // 현재 보이는 년도 계산
   const updateCurrentViewYear = useCallback(() => {
     if (!containerRef.current) return
     
@@ -256,8 +172,6 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
       }
     }
   }, [offset.y, scale, cellSize, gapSize, years, currentYear])
-
-  // 디바운스된 년도 업데이트
   useEffect(() => {
     const timer = setTimeout(() => {
       updateCurrentViewYear()
@@ -265,7 +179,6 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     
     return () => clearTimeout(timer)
   }, [offset, scale])
-
   // 초기 위치 설정
   useEffect(() => {
     if (!isInitialized && containerRef.current) {
@@ -323,7 +236,6 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
       }, 500)
     }
   }, [isInitialized, selectedDate, onDateSelect, years])
-
   // 오늘로 이동
   const goToToday = useCallback(() => {
     const today = new Date()
@@ -372,7 +284,6 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
       }, 150)
     }, 50)
   }, [onDateSelect, years, scale])
-
   // 드래그 핸들러
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsAnimating(false)
@@ -383,29 +294,23 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
       lastY: e.clientY
     })
   }
-
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!dragState.isDragging) return
-
     const deltaX = (e.clientX - dragState.lastX) * 0.8
     const deltaY = (e.clientY - dragState.lastY) * 0.8
-
     setOffset(prev => ({
       x: prev.x + deltaX,
       y: prev.y + deltaY
     }))
-
     setDragState(prev => ({
       ...prev,
       lastX: e.clientX,
       lastY: e.clientY
     }))
   }
-
   const handleMouseUp = () => {
     setDragState(prev => ({ ...prev, isDragging: false }))
   }
-
   // 버튼 기반 네비게이션
   const moveStep = 100
   const moveLeft = () => setOffset(prev => ({ ...prev, x: prev.x + moveStep }))
@@ -414,7 +319,6 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
   const moveDown = () => setOffset(prev => ({ ...prev, y: prev.y - moveStep }))
   const zoomIn = () => setScale(prev => Math.min(4, prev * 1.2))
   const zoomOut = () => setScale(prev => Math.max(1.5, prev / 1.2))
-
   // 연도 단위 이동
   const moveToYear = (targetYear: number) => {
     const yearIndex = years.findIndex(year => year === targetYear)
@@ -436,25 +340,21 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     
     setTimeout(() => setIsAnimating(false), 300)
   }
-
   // 휠 줌 핸들러
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault()
     const zoomFactor = e.deltaY > 0 ? 0.95 : 1.05
     setScale(prev => Math.max(1.5, Math.min(4, prev * zoomFactor)))
   }
-
   // 날짜 클릭 핸들러
   const handleDateClick = (date: Date) => {
     setTooltipData(null) // 클릭 시 툴팁 숨김
     onDateSelect(date)
   }
-
   // 특정 날짜가 선택되었는지 확인
   const isDateSelected = (date: Date) => {
     return selectedDate ? isSameDay(date, selectedDate) : false
   }
-
   // 월별 구분선 위치 계산
   const getMonthBoundaries = (year: number) => {
     const boundaries = []
@@ -465,7 +365,6 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     }
     return boundaries
   }
-
   // 🎯 NEW: 툴팁 위치 계산 (화면 경계 고려) - Fixed 위치용
   const calculateTooltipPosition = (basePosition: { x: number, y: number }) => {
     if (!containerRef.current) return basePosition
@@ -504,233 +403,44 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     
     return { x: Math.max(0, x), y: Math.max(0, y) }
   }
-
   return (
     <div className="relative w-full h-[500px] overflow-hidden border border-gray-200 rounded-lg bg-gray-50">
       {/* 로딩 상태 표시 */}
-      {loadingYears.size > 0 && (
-        <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 bg-white rounded-lg shadow-lg border border-gray-200 p-3">
-          <div className="flex items-center gap-3">
-            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-sm text-gray-700">
-              {Array.from(loadingYears).join(', ')}년 데이터 로딩 중...
-            </span>
-          </div>
-        </div>
-      )}
-
+      <Timeline2DLoadingIndicator loadingYears={loadingYears} />
       {/* 현재 보고 있는 년도 표시 */}
-      <div className="absolute top-16 left-4 z-10 bg-white rounded-lg shadow-sm border border-gray-200 p-2">
-        <div className="text-xs text-gray-600 mb-1">현재 보고 있는 년도</div>
-        <div className="text-lg font-bold text-blue-700">{currentYear}</div>
-        <div className="text-xs text-gray-500 mt-1">
-          {currentYear === new Date().getFullYear() ? '(올해)' : ''}
-        </div>
-      </div>
-
+      <Timeline2DYearIndicator currentYear={currentYear} />
       {/* 컨트롤 패널 */}
-      <div className="absolute top-4 left-4 z-10 bg-white rounded-lg shadow-sm border border-gray-200 p-3">
-        {/* 성능 정보 */}
-        <div className="mb-3 p-2 bg-green-50 rounded text-xs">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-green-600">🚀 최적화됨</span>
-          </div>
-          <div className="text-gray-600">
-            로딩된 연도: {yearDataCache.size}개
-          </div>
-          <div className="text-gray-600">
-            총 날짜: {Array.from(yearDataCache.values()).reduce((sum, dateSet) => sum + dateSet.size, 0)}개
-          </div>
-          <div className="text-gray-600">
-            일기 캐시: {diaryCache.current.size}개
-          </div>
-        </div>
-
-        {/* 🎯 NEW: 툴팁 디버깅 정보 */}
-        <div className="mb-3 p-2 bg-blue-50 rounded text-xs">
-          <div className="text-blue-700 font-medium mb-1">🔍 툴팁 상태</div>
-          <div className="text-gray-600">
-            호버 날짜: {hoveredDate ? format(hoveredDate, 'M/d') : '없음'}
-          </div>
-          <div className="text-gray-600">
-            툴팁 데이터: {tooltipData ? '✅' : '❌'}
-          </div>
-          <div className="text-gray-600">
-            로딩 중: {isLoadingTooltip ? '⏳' : '✅'}
-          </div>
-        </div>
-
-        {/* 기본 컨트롤 */}
-        <div className="flex items-center gap-2 mb-3">
-          <button
-            onClick={goToToday}
-            className="px-3 py-1 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium"
-          >
-            오늘
-          </button>
-          
-          <button
-            onClick={() => {
-              setYearDataCache(new Map())
-              setLoadingYears(new Set())
-              diaryCache.current.clear()
-              setTooltipData(null)
-            }}
-            className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 rounded transition-colors"
-          >
-            새로고침
-          </button>
-          
-          <div className="border-l border-gray-200 pl-2 ml-2">
-            <span className="text-xs text-gray-600">줌: {(scale * 100).toFixed(0)}%</span>
-          </div>
-        </div>
-
-        {/* 방향키 네비게이션 */}
-        <div className="mb-3">
-          <div className="text-xs text-gray-600 mb-2">이동</div>
-          <div className="grid grid-cols-3 gap-1 w-fit">
-            <div></div>
-            <button onClick={moveUp} className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded text-xs flex items-center justify-center">↑</button>
-            <div></div>
-            <button onClick={moveLeft} className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded text-xs flex items-center justify-center">←</button>
-            <div className="w-8 h-8"></div>
-            <button onClick={moveRight} className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded text-xs flex items-center justify-center">→</button>
-            <div></div>
-            <button onClick={moveDown} className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded text-xs flex items-center justify-center">↓</button>
-            <div></div>
-          </div>
-        </div>
-
-        {/* 줌 컨트롤 */}
-        <div className="mb-3">
-          <div className="text-xs text-gray-600 mb-2">줌</div>
-          <div className="flex gap-1">
-            <button onClick={zoomOut} className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded">줌 -</button>
-            <button onClick={zoomIn} className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded">줌 +</button>
-          </div>
-        </div>
-
-        {/* 연도 점프 */}
-        <div>
-          <div className="text-xs text-gray-600 mb-2">연도 이동</div>
-          <div className="flex gap-1">
-            <button onClick={() => moveToYear(currentYear - 1)} className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded">{currentYear - 1}</button>
-            <button onClick={() => moveToYear(new Date().getFullYear())} className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded">{new Date().getFullYear()}</button>
-            <button onClick={() => moveToYear(currentYear + 1)} className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded">{currentYear + 1}</button>
-          </div>
-        </div>
-      </div>
-
+      <Timeline2DControls
+        currentYear={currentYear}
+        scale={scale}
+        hoveredDate={hoveredDate}
+        tooltipData={tooltipData}
+        isLoadingTooltip={isLoadingTooltip}
+        yearDataCacheSize={yearDataCache.size}
+        totalDatesCount={Array.from(yearDataCache.values()).reduce((sum, dateSet) => sum + dateSet.size, 0)}
+        diaryCacheSize={0} // diaryCache가 useTimeline2DData 내부에 있음
+        onGoToToday={goToToday}
+        onRefresh={() => {
+          clearCache()
+          setTooltipData(null)
+        }}
+        onMoveUp={moveUp}
+        onMoveDown={moveDown}
+        onMoveLeft={moveLeft}
+        onMoveRight={moveRight}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onMoveToYear={moveToYear}
+      />
       {/* 사용법 안내 */}
-      <div className="absolute top-4 right-4 z-10 bg-white rounded-lg shadow-sm border border-gray-200 p-2 text-xs text-gray-600">
-        <div className="font-medium mb-1">✨ 2D Timeline + 툴팁</div>
-        <div>• 일기 호버: 미리보기 툴팁</div>
-        <div>• 드래그: 자유 이동</div>
-        <div>• 휠: 줌 in/out</div>
-      </div>
-
-      {/* 🎯 실제 호버 툴팁 (리치 컨텐츠) */}
-      {tooltipData && (
-        <div
-          className="fixed z-[9999] bg-white rounded-lg shadow-2xl border-2 border-blue-300 p-4 w-80 pointer-events-none"
-          style={{
-            left: `${calculateTooltipPosition(tooltipData.position).x}px`,
-            top: `${calculateTooltipPosition(tooltipData.position).y}px`,
-            zIndex: 9999
-          }}
-        >
-          {/* 디버깅 정보 */}
-          <div className="mb-2 p-1 bg-blue-100 rounded text-xs text-blue-700">
-            위치: {Math.round(tooltipData.position.x)}, {Math.round(tooltipData.position.y)} | 
-            계산된 위치: {Math.round(calculateTooltipPosition(tooltipData.position).x)}, {Math.round(calculateTooltipPosition(tooltipData.position).y)}
-          </div>
-
-          {/* 툴팁 헤더 */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-medium text-gray-900">
-              {format(tooltipData.date, 'M월 d일')}
-            </div>
-            {tooltipData.diary?.mood && (
-              <span className={`text-xs px-2 py-1 rounded-full ${
-                tooltipData.diary.mood === 'great' ? 'bg-green-100 text-green-700' :
-                tooltipData.diary.mood === 'good' ? 'bg-blue-100 text-blue-700' :
-                tooltipData.diary.mood === 'neutral' ? 'bg-gray-100 text-gray-700' :
-                tooltipData.diary.mood === 'bad' ? 'bg-yellow-100 text-yellow-700' :
-                tooltipData.diary.mood === 'terrible' ? 'bg-red-100 text-red-700' :
-                'bg-gray-100 text-gray-700'
-              }`}>
-                {tooltipData.diary.mood === 'great' ? '😊' :
-                 tooltipData.diary.mood === 'good' ? '🙂' :
-                 tooltipData.diary.mood === 'neutral' ? '😐' :
-                 tooltipData.diary.mood === 'bad' ? '😕' :
-                 tooltipData.diary.mood === 'terrible' ? '😢' : '😐'}
-              </span>
-            )}
-          </div>
-
-          {/* 일기 제목 */}
-          <h4 className="font-medium text-gray-900 mb-2 text-sm line-clamp-1">
-            {tooltipData.diary?.title || '제목 없음'}
-          </h4>
-
-          {/* 일기 내용 미리보기 */}
-          <p className="text-xs text-gray-600 mb-3 line-clamp-3">
-            {tooltipData.diary?.content || '내용 없음'}
-          </p>
-
-          {/* 사진 썸네일 */}
-          {tooltipData.diary?.photos && tooltipData.diary.photos.length > 0 && (
-            <div className="mb-3">
-              <div className="flex gap-1 mb-1">
-                {tooltipData.diary.photos.slice(0, 3).map((photo: string, index: number) => (
-                  <img
-                    key={index}
-                    src={photo}
-                    alt=""
-                    className="w-12 h-12 object-cover rounded border"
-                  />
-                ))}
-                {tooltipData.diary.photos.length > 3 && (
-                  <div className="w-12 h-12 bg-gray-100 rounded border flex items-center justify-center">
-                    <span className="text-xs text-gray-500">+{tooltipData.diary.photos.length - 3}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 메타 정보 */}
-          <div className="flex items-center justify-between text-xs text-gray-500">
-            <span>{tooltipData.diary?.wordCount || 0}자</span>
-            {tooltipData.diary?.tags && tooltipData.diary.tags.length > 0 && (
-              <div className="flex gap-1">
-                {tooltipData.diary.tags.slice(0, 2).map((tag: string, index: number) => (
-                  <span key={index} className="px-1 py-0.5 bg-gray-100 rounded text-xs">
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 클릭 안내 */}
-          <div className="mt-2 pt-2 border-t border-gray-100">
-            <div className="text-xs text-blue-600">클릭하여 자세히 보기 →</div>
-          </div>
-        </div>
-      )}
-
-      {/* 툴팁 로딩 표시 */}
-      {isLoadingTooltip && hoveredDate && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-40 bg-white rounded-lg shadow-lg border border-gray-200 p-2">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-xs text-gray-600">일기 로딩 중...</span>
-          </div>
-        </div>
-      )}
-
+      <Timeline2DUsageGuide />
+      {/* 툴팁 컴포넌트 */}
+      <Timeline2DTooltip
+        tooltipData={tooltipData}
+        isLoadingTooltip={isLoadingTooltip}
+        hoveredDate={hoveredDate}
+        calculateTooltipPosition={calculateTooltipPosition}
+      />
       {/* 2D 타임라인 그리드 */}
       <div
         ref={containerRef}
@@ -752,31 +462,13 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
       >
         <div className="p-8">
           {/* 월 라벨 (수평 상단) */}
-          <div className="flex mb-2 sticky top-0 bg-gray-50 z-30 border-b border-gray-300">
-            <div className="w-16 bg-gray-50 border-r border-gray-300"></div>
-            <div className="flex" style={{ width: `${(cellSize + gapSize) * maxDaysInYear}px` }}>
-              {monthLabels.map((month, index) => {
-                const monthStart = getMonthBoundaries(currentYear)[index] || 0
-                const monthWidth = index < 11 
-                  ? (getMonthBoundaries(currentYear)[index + 1] || maxDaysInYear) - monthStart
-                  : maxDaysInYear - monthStart
-                
-                return (
-                  <div
-                    key={month}
-                    className="text-xs font-medium text-gray-700 text-center border-r border-gray-300 flex items-center justify-center bg-gray-50"
-                    style={{ 
-                      width: `${monthWidth * (cellSize + gapSize)}px`,
-                      height: '24px'
-                    }}
-                  >
-                    {month}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
+          <Timeline2DHeader
+            cellSize={cellSize}
+            gapSize={gapSize}
+            maxDaysInYear={maxDaysInYear}
+            monthLabels={monthLabels}
+            getMonthBoundaries={getMonthBoundaries}
+          />
           {/* 연도별 열 */}
           {years.map((year, yearIndex) => {
             const isCurrentYear = year === new Date().getFullYear()
@@ -801,7 +493,6 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
                 >
                   {year}
                 </div>
-
                 {/* 날짜 그리드 */}
                 <div className="flex">
                   {Array.from({ length: maxDaysInYear }, (_, dayIndex) => {
@@ -819,63 +510,29 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
                         />
                       )
                     }
-
                     const isSelected = isDateSelected(date)
                     const hasData = hasDataForDate(date)
                     const isToday = isSameDay(date, new Date())
-                    const isWeekend = date.getDay() === 0 || date.getDay() === 6
+                    const weekend = isWeekend(date)
                     const isHovered = hoveredDate && isSameDay(hoveredDate, date)
                     
                     return (
-                      <div
+                      <Timeline2DDateCell
                         key={dayIndex}
                         ref={isToday ? todayCellRef : undefined}
-                        className={`cursor-pointer transition-all duration-150 border relative overflow-hidden ${
-                          isSelected
-                            ? 'bg-primary-600 border-primary-700 shadow-md z-30'
-                            : hasData
-                            ? isHovered
-                              ? 'bg-primary-400 border-primary-500 shadow-md z-20'
-                              : 'bg-primary-200 hover:bg-primary-300 border-primary-300'
-                            : isToday
-                            ? 'bg-yellow-400 hover:bg-yellow-500 border-yellow-500 shadow-sm'
-                            : isWeekend
-                            ? 'bg-gray-100 hover:bg-gray-200 border-gray-200'
-                            : 'bg-white hover:bg-gray-100 border-gray-200'
-                        }`}
-                        style={{
-                          width: `${cellSize}px`,
-                          height: `${cellSize}px`,
-                          marginRight: `${gapSize}px`,
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDateClick(date)
-                        }}
-                        onMouseEnter={(e) => {
-                          e.stopPropagation()
-                          handleDateMouseEnter(date, e)
-                        }}
-                        onMouseLeave={(e) => {
-                          e.stopPropagation()
-                          handleDateMouseLeave()
-                        }}
-                        title={hasData ? '' : `${format(date, 'yyyy년 MM월 dd일')}`}
-                        data-date={format(date, 'yyyy-MM-dd')} // 디버깅용 데이터 속성
-                        data-has-data={hasData.toString()} // 디버깅용 데이터 속성
-                      >
-                        {/* 큰 줌에서만 날짜 표시 */}
-                        {cellSize >= 20 && (
-                          <div className="p-1 text-[8px] text-gray-600 font-medium">
-                            {format(date, 'd')}
-                          </div>
-                        )}
-                        
-                        {/* 일기 있음 표시 */}
-                        {hasData && cellSize >= 16 && (
-                          <div className="absolute bottom-0 right-0 w-2 h-2 bg-blue-500 rounded-full"></div>
-                        )}
-                      </div>
+                        date={date}
+                        dayIndex={dayIndex}
+                        cellSize={cellSize}
+                        gapSize={gapSize}
+                        hasData={hasData}
+                        isSelected={isSelected}
+                        isToday={isToday}
+                        isWeekend={weekend}
+                        isHovered={isHovered}
+                        onDateClick={handleDateClick}
+                        onDateMouseEnter={handleDateMouseEnter}
+                        onDateMouseLeave={handleDateMouseLeave}
+                      />
                     )
                   })}
                 </div>
@@ -884,49 +541,10 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
           })}
         </div>
       </div>
-
       {/* 범례 */}
-      <div className="absolute bottom-4 right-4 bg-white rounded-lg shadow-sm border border-gray-200 p-3">
-        <div className="text-xs font-medium text-gray-700 mb-2">범례</div>
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-primary-600 rounded-sm"></div>
-            <span className="text-xs text-gray-600">선택됨</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-primary-200 rounded-sm"></div>
-            <span className="text-xs text-gray-600">일기 있음</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-yellow-400 rounded-sm"></div>
-            <span className="text-xs text-gray-600">오늘</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-gray-100 rounded-sm"></div>
-            <span className="text-xs text-gray-600">주말</span>
-          </div>
-        </div>
-        <div className="mt-2 pt-2 border-t border-gray-200">
-          <div className="text-xs text-gray-500">
-            ✨ 호버 툴팁 추가!<br/>
-            📊 API 호출 97% 감소<br/>
-            🚀 메모리 사용량 70% 절약<br/>
-            ⚡ 반응성 3배 향상
-          </div>
-        </div>
-      </div>
-
+      <Timeline2DLegend />
       {/* 선택된 날짜 정보 */}
-      {selectedDate && (
-        <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-sm border border-gray-200 p-3 max-w-xs">
-          <div className="text-sm font-medium text-gray-900">
-            {format(selectedDate, 'yyyy년 MM월 dd일')}
-          </div>
-          <div className="text-xs text-gray-600 mt-1">
-            {format(selectedDate, 'yyyy')}년 {getDayOfYear(selectedDate)}번째 날
-          </div>
-        </div>
-      )}
+      <Timeline2DSelectedInfo selectedDate={selectedDate} />
     </div>
   )
 }

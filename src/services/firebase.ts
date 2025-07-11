@@ -4,15 +4,17 @@ import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { ENV } from '../utils/env';
 
-// Firebase 설정
+// Firebase 설정 (환경변수 검증 포함)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: ENV.firebase.apiKey(),
+  authDomain: ENV.firebase.authDomain(),
+  projectId: ENV.firebase.projectId(),
+  storageBucket: ENV.firebase.storageBucket(),
+  messagingSenderId: ENV.firebase.messagingSenderId(),
+  appId: ENV.firebase.appId(),
+  measurementId: ENV.firebase.measurementId()
 };
 
 // Firebase 앱 초기화
@@ -25,7 +27,9 @@ export const storage = getStorage(app);
 export const functions = getFunctions(app);
 
 // 개발 환경에서 에뮬레이터 연결 (선택사항)
-if (import.meta.env.NODE_ENV === 'development' && import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
+if (ENV.mode.isDevelopment() && ENV.features.useEmulator()) {
+  console.log('Connecting to Firebase emulators...');
+  
   // Auth 에뮬레이터
   connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
   
@@ -37,6 +41,8 @@ if (import.meta.env.NODE_ENV === 'development' && import.meta.env.VITE_USE_FIREB
   
   // Functions 에뮬레이터
   connectFunctionsEmulator(functions, 'localhost', 5001);
+  
+  console.log('Firebase emulators connected successfully');
 }
 
 export default app;
