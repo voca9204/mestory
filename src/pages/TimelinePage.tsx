@@ -109,7 +109,7 @@ export function TimelinePage() {
 
       {/* Date Detail Panel */}
       {selectedDate && (
-        <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div id="date-detail-panel" className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">
               {selectedDate.toLocaleDateString('ko-KR', {

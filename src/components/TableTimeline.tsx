@@ -3,13 +3,14 @@ import { format, eachDayOfInterval, startOfMonth, endOfMonth, startOfYear, endOf
 import { useData } from '../contexts/DataContext'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { UnifiedDiaryEntry } from '../types/dataTypes'
+import { YearlyCalendarView } from './YearlyCalendarView'
 
 interface TableTimelineProps {
   selectedDate: Date | null
   onDateSelect: (date: Date) => void
 }
 
-type ViewMode = 'month' | 'year' | 'all'
+type ViewMode = 'month' | 'year' | 'all' | 'yearly-calendar'
 
 export function TableTimeline({ selectedDate, onDateSelect }: TableTimelineProps) {
   const { isUsingMockData, getDiaryByDate, getDiariesByDateRange } = useData()
@@ -36,6 +37,13 @@ export function TableTimeline({ selectedDate, onDateSelect }: TableTimelineProps
           const yearEnd = endOfYear(currentDate)
           startDate = format(yearStart, 'yyyy-MM-dd')
           endDate = format(yearEnd, 'yyyy-MM-dd')
+          break
+        case 'yearly-calendar':
+          // 연도별 캘린더도 년도 데이터를 로드
+          const calendarYearStart = startOfYear(currentDate)
+          const calendarYearEnd = endOfYear(currentDate)
+          startDate = format(calendarYearStart, 'yyyy-MM-dd')
+          endDate = format(calendarYearEnd, 'yyyy-MM-dd')
           break
         case 'all':
           // 전체 범위를 위해 넓은 범위 설정
@@ -84,6 +92,9 @@ export function TableTimeline({ selectedDate, onDateSelect }: TableTimelineProps
           const monthDate = new Date(yearStart.getFullYear(), i, 1)
           return monthDate
         })
+      case 'yearly-calendar':
+        // YearlyCalendarView가 자체적으로 처리
+        return []
       case 'all':
         // 모든 일기가 있는 날짜들만 표시
         return diaryEntries.map(diary => new Date(diary.date)).sort((a, b) => b.getTime() - a.getTime())
@@ -96,7 +107,7 @@ export function TableTimeline({ selectedDate, onDateSelect }: TableTimelineProps
   const navigatePrevious = () => {
     if (viewMode === 'month') {
       setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))
-    } else if (viewMode === 'year') {
+    } else if (viewMode === 'year' || viewMode === 'yearly-calendar') {
       setCurrentDate(new Date(currentDate.getFullYear() - 1, 0, 1))
     }
   }
@@ -104,7 +115,7 @@ export function TableTimeline({ selectedDate, onDateSelect }: TableTimelineProps
   const navigateNext = () => {
     if (viewMode === 'month') {
       setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))
-    } else if (viewMode === 'year') {
+    } else if (viewMode === 'year' || viewMode === 'yearly-calendar') {
       setCurrentDate(new Date(currentDate.getFullYear() + 1, 0, 1))
     }
   }
@@ -160,6 +171,7 @@ export function TableTimeline({ selectedDate, onDateSelect }: TableTimelineProps
             {[
               { key: 'month', label: '월별' },
               { key: 'year', label: '년별' },
+              { key: 'yearly-calendar', label: '연도별 캘린더' },
               { key: 'all', label: '전체' }
             ].map(({ key, label }) => (
               <button
@@ -180,6 +192,7 @@ export function TableTimeline({ selectedDate, onDateSelect }: TableTimelineProps
           <div className="text-lg font-semibold text-gray-900">
             {viewMode === 'month' && format(currentDate, 'yyyy년 M월')}
             {viewMode === 'year' && format(currentDate, 'yyyy년')}
+            {viewMode === 'yearly-calendar' && format(currentDate, 'yyyy년')}
             {viewMode === 'all' && '전체 일기'}
           </div>
         </div>
@@ -399,6 +412,15 @@ export function TableTimeline({ selectedDate, onDateSelect }: TableTimelineProps
               )
             })}
           </div>
+        )}
+
+        {viewMode === 'yearly-calendar' && (
+          <YearlyCalendarView 
+            selectedDate={selectedDate}
+            onDateSelect={onDateSelect}
+            currentYear={currentDate.getFullYear()}
+            diaryEntries={diaryEntries}
+          />
         )}
           </>
         )}

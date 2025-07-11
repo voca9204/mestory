@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { format, startOfYear, endOfYear, eachDayOfInterval, isSameDay, getDayOfYear } from 'date-fns'
 import { useData } from '../contexts/DataContext'
-import { Timeline2DProps, TooltipData, DragState, Offset } from './Timeline2DTypes'
+import { Timeline2DProps, TooltipData, Offset } from './Timeline2DTypes'
 import { Timeline2DTooltip } from './Timeline2DTooltip'
 import { Timeline2DLegend } from './Timeline2DLegend'
 import { Timeline2DControls } from './Timeline2DControls'
@@ -24,9 +24,11 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
   const { isUsingMockData } = useData()
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [scale, setScale] = useState(2)
-  const [dragState, setDragState] = useState<DragState>({ isDragging: false, lastX: 0, lastY: 0 })
   const [offset, setOffset] = useState<Offset>({ x: 0, y: 0 })
+  const [dragState, setDragState] = useState({ isDragging: false, lastX: 0, lastY: 0 })
   const [isInitialized, setIsInitialized] = useState(false)
+  const [isWheelZoomEnabled, setIsWheelZoomEnabled] = useState(true)
+  const [showControlInfo, setShowControlInfo] = useState(true)
   
   const {
     yearDataCache,
@@ -47,6 +49,23 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
   const todayCellRef = useRef<HTMLDivElement>(null)
   const cellSize = DEFAULT_GRID_CONFIG.cellSize * scale
   const gapSize = DEFAULT_GRID_CONFIG.gapSize
+  const maxDaysInYear = DEFAULT_GRID_CONFIG.maxDaysInYear
+  
+  // 컨테이너 크기
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
+  
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect()
+        setContainerSize({ width: rect.width, height: rect.height })
+      }
+    }
+    // 지연 실행으로 렌더링 완료 후 크기 측정
+    setTimeout(updateSize, 100)
+    window.addEventListener('resize', updateSize)
+    return () => window.removeEventListener('resize', updateSize)
+  }, [])
   const monthLabels = DEFAULT_GRID_CONFIG.monthLabels
   const currentYearNum = new Date().getFullYear()
   const years = useMemo(() => {
@@ -54,13 +73,15 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     const endYear = currentYearNum + 10
     return Array.from({ length: endYear - startYear + 1 }, (_, i) => startYear + i)
   }, [currentYearNum])
-  const maxDaysInYear = DEFAULT_GRID_CONFIG.maxDaysInYear
+  
+  // 전체 컨텐츠 크기 계산
+  const contentWidth = 64 + 32 + maxDaysInYear * (DEFAULT_GRID_CONFIG.cellSize + gapSize) + 32 // yearLabelWidth + padding + days + padding
+  const contentHeight = 32 + 26 + years.length * (DEFAULT_GRID_CONFIG.cellSize + gapSize) + 32 // padding + headerHeight + years + padding
   const [isAnimating, setIsAnimating] = useState(false)
   const handleDateMouseEnter = useCallback((date: Date, event: React.MouseEvent) => {
     const hasData = hasDataForDate(date)
-    const isDragging = dragState.isDragging
     
-    if (!hasData || isDragging) {
+    if (!hasData) {
       return
     }
     
@@ -102,7 +123,7 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
         }
       }, 300)
     }
-  }, [hasDataForDate, dragState.isDragging, loadDiaryForTooltip])
+  }, [hasDataForDate, loadDiaryForTooltip])
   const handleDateMouseLeave = useCallback(() => {
     setHoveredDate(null)
     setTooltipData(null)
@@ -181,136 +202,153 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
   }, [offset, scale])
   // 초기 위치 설정
   useEffect(() => {
-    if (!isInitialized && containerRef.current) {
+    if (!isInitialized && containerRef.current && years.length > 0) {
       const today = new Date()
       
       if (!selectedDate) {
         onDateSelect(today)
       }
       
-      setCurrentYear(today.getFullYear())
-      setIsAnimating(true)
-      setScale(2.0)
-      
-      const performCenterOnToday = () => {
-        if (!containerRef.current) return
-        
-        const today = new Date()
+      // 초기 로드 시 오늘 날짜로 이동
+      setTimeout(() => {
         const todayYear = today.getFullYear()
         const todayDayOfYear = getDayOfYear(today)
         const yearIndex = years.findIndex(year => year === todayYear)
         
-        if (yearIndex !== -1) {
+        if (yearIndex !== -1 && containerRef.current) {
           const containerRect = containerRef.current.getBoundingClientRect()
-          const containerCenterX = containerRect.width / 2
-          const containerHeight = containerRect.height
+          const viewportWidth = containerRect.width
+          const viewportHeight = containerRect.height
           
           const padding = 32
           const headerHeight = 26
           const yearLabelWidth = 64
-          const currentCellSize = 12 * 2.0
-          const currentGapSize = 1
+          const baseCellSize = DEFAULT_GRID_CONFIG.cellSize
+          const baseGapSize = DEFAULT_GRID_CONFIG.gapSize
+          const newScale = 2.5
           
-          const cellX = yearLabelWidth + padding + (todayDayOfYear - 1) * (currentCellSize + currentGapSize) + currentCellSize/2
-          const cellY = padding + headerHeight + yearIndex * (currentCellSize + currentGapSize) + currentCellSize/2
-          const targetY = containerHeight * 0.33
+          const cellCenterX = yearLabelWidth + padding + (todayDayOfYear - 1) * (baseCellSize + baseGapSize) + baseCellSize / 2
+          const cellCenterY = padding + headerHeight + yearIndex * (baseCellSize + baseGapSize) + baseCellSize / 2
           
-          const targetOffsetX = containerCenterX - cellX * 2.5
-          const targetOffsetY = targetY - cellY * 2.5
+          const viewportCenterX = viewportWidth / 2
+          const viewportCenterY = viewportHeight / 2
           
-          setOffset({
-            x: targetOffsetX,
-            y: targetOffsetY
+          const newOffsetX = viewportCenterX - (cellCenterX * newScale)
+          const newOffsetY = viewportCenterY - (cellCenterY * newScale)
+          
+          console.log('🚀 초기 로드 시 오늘로 이동:', {
+            오늘날짜: format(today, 'yyyy-MM-dd'),
+            yearIndex,
+            todayDayOfYear,
+            뷰포트크기: { width: viewportWidth, height: viewportHeight },
+            셀위치_스케일전: { x: cellCenterX, y: cellCenterY },
+            셀위치_스케일후: { x: cellCenterX * newScale, y: cellCenterY * newScale },
+            뷰포트중앙: { x: viewportCenterX, y: viewportCenterY },
+            최종오프셋: { x: newOffsetX, y: newOffsetY },
+            스케일: newScale
           })
+          
+          setIsAnimating(true)
+          setScale(newScale)
+          setOffset({
+            x: newOffsetX,
+            y: newOffsetY
+          })
+          setCurrentYear(todayYear)
+          
+          setTimeout(() => {
+            setIsAnimating(false)
+          }, 300)
         }
-      }
-      
-      setTimeout(() => {
-        performCenterOnToday()
-      }, 100)
-      
-      setTimeout(() => {
-        performCenterOnToday()
         setIsInitialized(true)
-        setIsAnimating(false)
-      }, 500)
+      }, 200)
     }
   }, [isInitialized, selectedDate, onDateSelect, years])
-  // 오늘로 이동
-  const goToToday = useCallback(() => {
-    const today = new Date()
-    setIsAnimating(true)
-    setCurrentYear(today.getFullYear())
-    onDateSelect(today)
+  // wheel 이벤트 핸들러 등록 (non-passive)
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
     
-    if (scale < 2 || scale > 4) {
-      setScale(3)
+    const wheelHandler = (e: WheelEvent) => {
+      if (isWheelZoomEnabled) {
+        e.preventDefault()
+        const zoomFactor = e.deltaY > 0 ? 0.95 : 1.05
+        setScale(prev => Math.max(1.5, Math.min(4, prev * zoomFactor)))
+      }
     }
     
-    setTimeout(() => {
-      if (containerRef.current) {
-        const today = new Date()
-        const todayYear = today.getFullYear()
-        const todayDayOfYear = getDayOfYear(today)
-        const yearIndex = years.findIndex(year => year === todayYear)
-        
-        if (yearIndex !== -1) {
-          const containerRect = containerRef.current.getBoundingClientRect()
-          const containerCenterX = containerRect.width / 2
-          const containerHeight = containerRect.height
-          
-          const padding = 32
-          const headerHeight = 26
-          const yearLabelWidth = 64
-          const currentCellSize = 12 * scale
-          const currentGapSize = 1
-          
-          const cellX = yearLabelWidth + padding + (todayDayOfYear - 1) * (currentCellSize + currentGapSize) + currentCellSize/2
-          const cellY = padding + headerHeight + yearIndex * (currentCellSize + currentGapSize) + currentCellSize/2
-          const targetY = containerHeight * 0.33
-          
-          const targetOffsetX = containerCenterX - cellX * scale
-          const targetOffsetY = targetY - cellY * scale
-          
-          setOffset({
-            x: targetOffsetX,
-            y: targetOffsetY
-          })
-        }
-      }
-      
-      setTimeout(() => {
-        setIsAnimating(false)
-      }, 150)
-    }, 50)
-  }, [onDateSelect, years, scale])
-  // 드래그 핸들러
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsAnimating(false)
-    setTooltipData(null) // 드래그 시작하면 툴팁 숨김
-    setDragState({
-      isDragging: true,
-      lastX: e.clientX,
-      lastY: e.clientY
+    // passive: false로 설정하여 preventDefault() 가능하게 함
+    container.addEventListener('wheel', wheelHandler, { passive: false })
+    
+    return () => {
+      container.removeEventListener('wheel', wheelHandler)
+    }
+  }, [isWheelZoomEnabled])
+  // 오늘로 이동
+  const goToToday = useCallback(() => {
+    if (!containerRef.current) return
+    
+    const today = new Date()
+    const todayYear = today.getFullYear()
+    const todayDayOfYear = getDayOfYear(today)
+    const yearIndex = years.findIndex(year => year === todayYear)
+    
+    if (yearIndex === -1) return
+    
+    // 컨테이너 크기 가져오기
+    const containerRect = containerRef.current.getBoundingClientRect()
+    const viewportWidth = containerRect.width
+    const viewportHeight = containerRect.height
+    
+    // 레이아웃 상수
+    const padding = 32
+    const headerHeight = 26
+    const yearLabelWidth = 64
+    const baseCellSize = DEFAULT_GRID_CONFIG.cellSize // 12
+    const baseGapSize = DEFAULT_GRID_CONFIG.gapSize   // 1
+    
+    // 적절한 줌 레벨 설정
+    const newScale = 2.5
+    
+    // 오늘 날짜 셀의 중심점 계산 (스케일 적용 전)
+    const cellCenterX = yearLabelWidth + padding + (todayDayOfYear - 1) * (baseCellSize + baseGapSize) + baseCellSize / 2
+    const cellCenterY = padding + headerHeight + yearIndex * (baseCellSize + baseGapSize) + baseCellSize / 2
+    
+    // 뷰포트 중앙
+    const viewportCenterX = viewportWidth / 2
+    const viewportCenterY = viewportHeight / 2
+    
+    // 오프셋 계산: 셀을 뷰포트 중앙으로 이동
+    const newOffsetX = viewportCenterX - (cellCenterX * newScale)
+    const newOffsetY = viewportCenterY - (cellCenterY * newScale)
+    
+    console.log('🎯 오늘로 이동 계산:', {
+      오늘날짜: format(today, 'yyyy-MM-dd'),
+      yearIndex,
+      todayDayOfYear,
+      뷰포트크기: { width: viewportWidth, height: viewportHeight },
+      셀위치_스케일전: { x: cellCenterX, y: cellCenterY },
+      셀위치_스케일후: { x: cellCenterX * newScale, y: cellCenterY * newScale },
+      뷰포트중앙: { x: viewportCenterX, y: viewportCenterY },
+      최종오프셋: { x: newOffsetX, y: newOffsetY },
+      스케일: newScale
     })
-  }
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!dragState.isDragging) return
-    const deltaX = (e.clientX - dragState.lastX) * 0.8
-    const deltaY = (e.clientY - dragState.lastY) * 0.8
-    setOffset(prev => ({
-      x: prev.x + deltaX,
-      y: prev.y + deltaY
-    }))
-    setDragState(prev => ({
-      ...prev,
-      lastX: e.clientX,
-      lastY: e.clientY
-    }))
-  }
-  const handleMouseUp = () => {
-    setDragState(prev => ({ ...prev, isDragging: false }))
-  }
+    
+    // 애니메이션과 함께 상태 업데이트
+    setIsAnimating(true)
+    setScale(newScale)
+    setOffset({
+      x: newOffsetX,
+      y: newOffsetY
+    })
+    setCurrentYear(todayYear)
+    onDateSelect(today)
+    
+    // 애니메이션 종료
+    setTimeout(() => {
+      setIsAnimating(false)
+    }, 300)
+  }, [years, onDateSelect])
   // 버튼 기반 네비게이션
   const moveStep = 100
   const moveLeft = () => setOffset(prev => ({ ...prev, x: prev.x + moveStep }))
@@ -319,6 +357,37 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
   const moveDown = () => setOffset(prev => ({ ...prev, y: prev.y - moveStep }))
   const zoomIn = () => setScale(prev => Math.min(4, prev * 1.2))
   const zoomOut = () => setScale(prev => Math.max(1.5, prev / 1.2))
+  
+  // 드래그 핸들러
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setDragState({
+      isDragging: true,
+      lastX: e.clientX,
+      lastY: e.clientY
+    })
+  }
+  
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!dragState.isDragging) return
+    
+    const deltaX = e.clientX - dragState.lastX
+    const deltaY = e.clientY - dragState.lastY
+    
+    setOffset(prev => ({
+      x: prev.x + deltaX,
+      y: prev.y + deltaY
+    }))
+    
+    setDragState(prev => ({
+      ...prev,
+      lastX: e.clientX,
+      lastY: e.clientY
+    }))
+  }
+  
+  const handleMouseUp = () => {
+    setDragState(prev => ({ ...prev, isDragging: false }))
+  }
   // 연도 단위 이동
   const moveToYear = (targetYear: number) => {
     const yearIndex = years.findIndex(year => year === targetYear)
@@ -339,12 +408,6 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     setCurrentYear(targetYear)
     
     setTimeout(() => setIsAnimating(false), 300)
-  }
-  // 휠 줌 핸들러
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault()
-    const zoomFactor = e.deltaY > 0 ? 0.95 : 1.05
-    setScale(prev => Math.max(1.5, Math.min(4, prev * zoomFactor)))
   }
   // 날짜 클릭 핸들러
   const handleDateClick = (date: Date) => {
@@ -404,7 +467,7 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
     return { x: Math.max(0, x), y: Math.max(0, y) }
   }
   return (
-    <div className="relative w-full h-[500px] overflow-hidden border border-gray-200 rounded-lg bg-gray-50">
+    <div className="relative w-full h-[500px] border border-gray-200 rounded-lg bg-gray-50" style={{position: 'relative', overflow: 'hidden'}}>
       {/* 로딩 상태 표시 */}
       <Timeline2DLoadingIndicator loadingYears={loadingYears} />
       {/* 현재 보고 있는 년도 표시 */}
@@ -419,6 +482,8 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
         yearDataCacheSize={yearDataCache.size}
         totalDatesCount={Array.from(yearDataCache.values()).reduce((sum, dateSet) => sum + dateSet.size, 0)}
         diaryCacheSize={0} // diaryCache가 useTimeline2DData 내부에 있음
+        isWheelZoomEnabled={isWheelZoomEnabled}
+        showInfo={showControlInfo}
         onGoToToday={goToToday}
         onRefresh={() => {
           clearCache()
@@ -431,6 +496,8 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
         onZoomIn={zoomIn}
         onZoomOut={zoomOut}
         onMoveToYear={moveToYear}
+        onToggleWheelZoom={() => setIsWheelZoomEnabled(prev => !prev)}
+        onToggleInfo={() => setShowControlInfo(prev => !prev)}
       />
       {/* 사용법 안내 */}
       <Timeline2DUsageGuide />
@@ -444,9 +511,7 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
       {/* 2D 타임라인 그리드 */}
       <div
         ref={containerRef}
-        className={`w-full h-full cursor-grab active:cursor-grabbing ${
-          isAnimating ? 'transition-transform duration-300 ease-out' : ''
-        }`}
+        className="w-full h-full cursor-move overflow-hidden"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -454,13 +519,16 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
           handleMouseUp()
           handleDateMouseLeave()
         }}
-        onWheel={handleWheel}
-        style={{
-          transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-          transformOrigin: '0 0'
-        }}
       >
-        <div className="p-8">
+        <div 
+          className={`p-8 ${
+            isAnimating ? 'transition-transform duration-300 ease-out' : ''
+          }`}
+          style={{
+            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+            transformOrigin: '0 0'
+          }}
+        >
           {/* 월 라벨 (수평 상단) */}
           <Timeline2DHeader
             cellSize={cellSize}
@@ -481,14 +549,15 @@ export function Timeline2D({ selectedDate, onDateSelect }: Timeline2DProps) {
               <div key={year} className="flex items-start mb-1">
                 {/* 연도 라벨 */}
                 <div 
-                  className={`w-16 text-xs font-medium text-right pr-2 py-1 border-r-2 border-gray-400 shadow-sm ${
-                    isCurrentYear ? 'text-white font-bold bg-blue-600' : 'text-gray-700 bg-gray-100'
+                  className={`w-16 text-sm font-bold text-center flex items-center justify-center border-r-3 shadow-md ${
+                    isCurrentYear ? 'text-white bg-blue-600 border-blue-700' : 'text-gray-800 bg-gray-200 border-gray-400'
                   }`}
                   style={{ 
                     height: `${cellSize + gapSize}px`,
                     position: 'sticky',
                     left: '0',
-                    zIndex: 25
+                    zIndex: 25,
+                    fontSize: Math.max(11, Math.min(14, cellSize * 0.8)) + 'px'
                   }}
                 >
                   {year}

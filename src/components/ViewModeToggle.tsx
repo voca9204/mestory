@@ -19,7 +19,7 @@ export function ViewModeToggle({ mode, onModeChange }: ViewModeToggleProps) {
         }`}
       >
         <ViewColumnsIcon className="w-4 h-4" />
-        2D 뷰
+        2D 타임라인
       </button>
       
       <button

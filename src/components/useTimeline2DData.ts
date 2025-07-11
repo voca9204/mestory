@@ -15,7 +15,6 @@ export function useTimeline2DData() {
       return
     }
 
-    console.log(`📅 Loading data for year ${year}...`)
     setLoadingYears(prev => new Set(prev).add(year))
     
     try {
@@ -27,7 +26,6 @@ export function useTimeline2DData() {
       
       setYearDataCache(prev => new Map(prev).set(year, dateSet))
       
-      console.log(`✅ Year ${year}: Found ${datesWithData.length} dates with data`)
     } catch (error) {
       console.error(`❌ Error loading year ${year}:`, error)
     } finally {

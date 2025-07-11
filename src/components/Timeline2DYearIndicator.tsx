@@ -6,11 +6,11 @@ export function Timeline2DYearIndicator({ currentYear }: Timeline2DYearIndicator
   const isCurrentYear = currentYear === new Date().getFullYear()
   
   return (
-    <div className="absolute top-16 left-4 z-10 bg-white rounded-lg shadow-sm border border-gray-200 p-2">
-      <div className="text-xs text-gray-600 mb-1">현재 보고 있는 년도</div>
-      <div className="text-lg font-bold text-blue-700">{currentYear}</div>
+    <div className="absolute top-4 right-24 z-20 bg-blue-600 text-white rounded-lg shadow-lg p-3">
+      <div className="text-xs opacity-90 mb-1">현재 위치</div>
+      <div className="text-2xl font-bold">{currentYear}년</div>
       {isCurrentYear && (
-        <div className="text-xs text-gray-500 mt-1">(올해)</div>
+        <div className="text-xs bg-blue-700 rounded px-2 py-1 mt-2 text-center">올해</div>
       )}
     </div>
   )
