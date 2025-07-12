@@ -22,15 +22,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { logOut, signInWithGoogle } from '../services/auth'
 import useMissionStore from '../store/missionStore'
 
-const navigationItems = [
-  { name: '홈', href: '/', icon: HomeIcon, activeIcon: HomeIconSolid },
-  { name: '타임라인', href: '/timeline', icon: CalendarIcon, activeIcon: CalendarIconSolid },
-  { name: '일기', href: '/diary', icon: BookOpenIcon, activeIcon: BookOpenIconSolid },
-  { name: '미션', href: '/missions', icon: TrophyIcon, activeIcon: TrophyIconSolid },
-  { name: '분석', href: '/analytics', icon: ChartBarIcon, activeIcon: ChartBarIconSolid },
-  { name: '설정', href: '/settings', icon: CogIcon, activeIcon: CogIconSolid },
-]
-
 export function Navigation() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -80,6 +71,25 @@ export function Navigation() {
     }
   }
 
+  // 미션 클릭 핸들러 - 진행 중인 미션이 있으면 바로 active 페이지로
+  const handleMissionClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    if (activeMissionsCount > 0) {
+      navigate('/missions/active')
+    } else {
+      navigate('/missions')
+    }
+  }
+
+  const navigationItems = [
+    { name: '홈', href: '/', icon: HomeIcon, activeIcon: HomeIconSolid },
+    { name: '타임라인', href: '/timeline', icon: CalendarIcon, activeIcon: CalendarIconSolid },
+    { name: '일기', href: '/diary', icon: BookOpenIcon, activeIcon: BookOpenIconSolid },
+    { name: '미션', href: '/missions', icon: TrophyIcon, activeIcon: TrophyIconSolid, onClick: handleMissionClick },
+    { name: '분석', href: '/analytics', icon: ChartBarIcon, activeIcon: ChartBarIconSolid },
+    { name: '설정', href: '/settings', icon: CogIcon, activeIcon: CogIconSolid },
+  ]
+
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
       <div className="container mx-auto px-4">
@@ -102,6 +112,7 @@ export function Navigation() {
                 <Link
                   key={item.name}
                   to={item.href}
+                  onClick={item.onClick}
                   className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     active
                       ? 'bg-blue-100 text-blue-700'
@@ -184,6 +195,7 @@ export function Navigation() {
               <Link
                 key={item.name}
                 to={item.href}
+                onClick={item.onClick}
                 className={`relative flex flex-col items-center space-y-1 px-2 py-2 text-xs font-medium ${
                   active
                     ? 'text-blue-600'

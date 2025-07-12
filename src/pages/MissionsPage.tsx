@@ -1,54 +1,18 @@
-import React, { useEffect, useState } from 'react'
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
+import React from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { MISSION_TYPE_INFO, MissionType } from '../types/missions'
 import useMissionStore from '../store/missionStore'
 
 const MissionsPage: React.FC = () => {
   const navigate = useNavigate()
-  const location = useLocation()
   const [searchParams] = useSearchParams()
   const { getActiveMissions } = useMissionStore()
-  const [isChecking, setIsChecking] = useState(true)
   
   // URL 파라미터에서 add=true 확인
   const isAddingNew = searchParams.get('add') === 'true'
   
-  // 진행 중인 미션이 있으면 자동으로 활성 미션 페이지로 이동
-  useEffect(() => {
-    // add=true 파라미터가 있으면 리다이렉트하지 않음
-    if (isAddingNew) {
-      setIsChecking(false)
-      return
-    }
-    
-    const checkActiveMissions = () => {
-      const activeMissions = getActiveMissions()
-      if (activeMissions.length > 0) {
-        navigate('/missions/active', { replace: true })
-      } else {
-        setIsChecking(false)
-      }
-    }
-    
-    // 약간의 지연을 주어 화면 깜빡임 방지
-    const timer = setTimeout(checkActiveMissions, 100)
-    return () => clearTimeout(timer)
-  }, [getActiveMissions, navigate, isAddingNew])
-  
   const handleMissionSelect = (missionType: MissionType) => {
     navigate('/missions/new', { state: { missionType } })
-  }
-
-  // 진행 중인 미션 확인 중일 때 로딩 표시
-  if (isChecking && !isAddingNew) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">미션 확인 중...</p>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -104,11 +68,21 @@ const MissionsPage: React.FC = () => {
           ))}
         </div>
 
-        {/* 활성 미션 보기 버튼 - 진행 중인 미션이 없을 때만 표시 */}
+        {/* 활성 미션 보기 버튼 */}
         <div className="mt-12 text-center">
-          <p className="text-gray-500 text-sm mb-4">
-            위의 미션 중 하나를 선택하여 시작하세요
-          </p>
+          {getActiveMissions().length > 0 ? (
+            <button
+              onClick={() => navigate('/missions/active')}
+              className="inline-flex items-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-md transition-colors duration-200"
+            >
+              <span className="mr-2">🏃</span>
+              진행 중인 미션 보기
+            </button>
+          ) : (
+            <p className="text-gray-500 text-sm">
+              위의 미션 중 하나를 선택하여 시작하세요
+            </p>
+          )}
         </div>
       </div>
     </div>
