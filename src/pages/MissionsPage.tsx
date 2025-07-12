@@ -1,16 +1,28 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { MISSION_TYPE_INFO, MissionType } from '../types/missions'
 import useMissionStore from '../store/missionStore'
 
 const MissionsPage: React.FC = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const { getActiveMissions } = useMissionStore()
   const [isChecking, setIsChecking] = useState(true)
+  
+  // state에서 skipRedirect 확인
+  const skipRedirect = location.state?.skipRedirect || false
   
   // 진행 중인 미션이 있으면 자동으로 활성 미션 페이지로 이동
   useEffect(() => {
     const checkActiveMissions = () => {
+      // skipRedirect가 true면 리다이렉트하지 않음
+      if (skipRedirect) {
+        setIsChecking(false)
+        // state 초기화
+        navigate(location.pathname, { replace: true, state: null })
+        return
+      }
+      
       const activeMissions = getActiveMissions()
       if (activeMissions.length > 0) {
         navigate('/missions/active', { replace: true })
@@ -22,7 +34,7 @@ const MissionsPage: React.FC = () => {
     // 약간의 지연을 주어 화면 깜빡임 방지
     const timer = setTimeout(checkActiveMissions, 100)
     return () => clearTimeout(timer)
-  }, [getActiveMissions, navigate])
+  }, [getActiveMissions, navigate, skipRedirect, location.pathname])
   
   const handleMissionSelect = (missionType: MissionType) => {
     navigate('/missions/new', { state: { missionType } })
@@ -54,6 +66,21 @@ const MissionsPage: React.FC = () => {
 
       {/* 미션 목록 */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* 진행 중인 미션이 있을 때 안내 메시지 */}
+        {skipRedirect && getActiveMissions().length > 0 && (
+          <div className="mb-8 bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+            <p className="text-blue-800 font-medium">
+              이미 {getActiveMissions().length}개의 미션이 진행 중입니다.
+            </p>
+            <button
+              onClick={() => navigate('/missions/active')}
+              className="mt-2 text-blue-600 hover:text-blue-700 underline text-sm"
+            >
+              진행 중인 미션 보기 →
+            </button>
+          </div>
+        )}
+        
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {Object.values(MISSION_TYPE_INFO).map((mission) => (
             <button
