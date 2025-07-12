@@ -181,7 +181,7 @@ const ActiveMissionsPage: React.FC = () => {
         {/* 새 미션 추가 버튼 */}
         <div className="mt-8 text-center">
           <button
-            onClick={() => navigate('/missions', { state: { skipRedirect: true } })}
+            onClick={() => navigate('/missions?add=true')}
             className="inline-flex items-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-md transition-colors duration-200"
           >
             <span className="mr-2">+</span>

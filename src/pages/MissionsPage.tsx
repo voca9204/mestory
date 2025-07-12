@@ -1,28 +1,27 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { MISSION_TYPE_INFO, MissionType } from '../types/missions'
 import useMissionStore from '../store/missionStore'
 
 const MissionsPage: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { getActiveMissions } = useMissionStore()
   const [isChecking, setIsChecking] = useState(true)
   
-  // state에서 skipRedirect 확인
-  const skipRedirect = location.state?.skipRedirect || false
+  // URL 파라미터에서 add=true 확인
+  const isAddingNew = searchParams.get('add') === 'true'
   
   // 진행 중인 미션이 있으면 자동으로 활성 미션 페이지로 이동
   useEffect(() => {
+    // add=true 파라미터가 있으면 리다이렉트하지 않음
+    if (isAddingNew) {
+      setIsChecking(false)
+      return
+    }
+    
     const checkActiveMissions = () => {
-      // skipRedirect가 true면 리다이렉트하지 않음
-      if (skipRedirect) {
-        setIsChecking(false)
-        // state 초기화
-        navigate(location.pathname, { replace: true, state: null })
-        return
-      }
-      
       const activeMissions = getActiveMissions()
       if (activeMissions.length > 0) {
         navigate('/missions/active', { replace: true })
@@ -34,14 +33,14 @@ const MissionsPage: React.FC = () => {
     // 약간의 지연을 주어 화면 깜빡임 방지
     const timer = setTimeout(checkActiveMissions, 100)
     return () => clearTimeout(timer)
-  }, [getActiveMissions, navigate, skipRedirect, location.pathname])
+  }, [getActiveMissions, navigate, isAddingNew])
   
   const handleMissionSelect = (missionType: MissionType) => {
     navigate('/missions/new', { state: { missionType } })
   }
 
   // 진행 중인 미션 확인 중일 때 로딩 표시
-  if (isChecking) {
+  if (isChecking && !isAddingNew) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
@@ -67,7 +66,7 @@ const MissionsPage: React.FC = () => {
       {/* 미션 목록 */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* 진행 중인 미션이 있을 때 안내 메시지 */}
-        {skipRedirect && getActiveMissions().length > 0 && (
+        {isAddingNew && getActiveMissions().length > 0 && (
           <div className="mb-8 bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
             <p className="text-blue-800 font-medium">
               이미 {getActiveMissions().length}개의 미션이 진행 중입니다.
