@@ -12,7 +12,7 @@ mestory/
 │   ├── 📁 components/                # 재사용 가능한 UI 컴포넌트
 │   │   ├── 📄 DateSelector.tsx       # 날짜 선택 컴포넌트
 │   │   ├── 📄 DiaryEditor.tsx        # 일기 작성 에디터
-│   │   ├── 📄 Navigation.tsx         # 메인 네비게이션 바 (로그아웃 기능 추가) 🔥 NEW
+│   │   ├── 📄 Navigation.tsx         # 메인 네비게이션 바 (미션 배지 추가) ✨ NEW
 │   │   ├── 📄 PhotoUpload.tsx        # 사진 업로드 컴포넌트
 │   │   ├── 📄 TableTimeline.tsx      # 표 형태 타임라인 뷰 (연도별 캘린더 포함) ✨
 │   │   ├── 📄 Timeline2D.tsx         # 2D 타임라인 메인 컴포넌트 (호버 툴팁 추가) ✨ NEW
@@ -30,6 +30,9 @@ mestory/
 │   │   ├── 📄 AuthPage.tsx           # 인증 페이지 (Google 로그인 + 둘러보기) 🔥 NEW
 │   │   ├── 📄 DiaryPage.tsx          # 일기 상세 페이지 (사진 모달 포함) ⭐
 │   │   ├── 📄 HomePage.tsx           # 홈페이지 (최근 일기 표시)
+│   │   ├── 📄 MissionsPage.tsx       # 미션 선택 페이지 (스마트 네비게이션) 🔥 NEW
+│   │   ├── 📄 NewMissionPage.tsx     # 새 미션 생성 페이지 🔥 NEW
+│   │   ├── 📄 ActiveMissionsPage.tsx # 진행 중인 미션 관리 페이지 🔥 NEW
 │   │   ├── 📄 SettingsPage.tsx       # 설정 페이지 (프로필 관리 + 사용자 설정) 🔥 NEW
 │   │   ├── 📄 TimelinePage.tsx       # 타임라인 메인 페이지 (성능 최적화 완료) 🚀 NEW
 │   │   ├── 📄 TimelinePage_Original.tsx # 원본 TimelinePage 백업 🔄 BACKUP
@@ -46,12 +49,16 @@ mestory/
 │   │   └── 📄 database.ts            # 최적화된 Firestore 데이터베이스 서비스 v2.0 🔥 NEW
 │   │
 │   ├── 📁 store/                     # 상태 관리 (Redux/Zustand)
+│   │   └── 📄 missionStore.ts        # Zustand 기반 미션 상태 관리 🔥 NEW
 │   ├── 📁 types/                     # TypeScript 타입 정의
+│   │   ├── 📄 missions.ts            # 미션 타입 및 인터페이스 정의 🔥 NEW
+│   │   └── 📄 missionContent.ts      # 30일치 미션 콘텐츠 정의 🔥 NEW
 │   └── 📁 utils/                     # 유틸리티 함수
 │       └── 📄 browser.ts             # 브라우저 감지 및 호환성 유틸리티 🔥 NEW
 │
 ├── 📁 docs/                          # 프로젝트 문서 🔥 NEW
-│   └── 📄 firestore-data-model.md   # Firestore 데이터 모델 설계 v2.0 🔥 NEW
+│   ├── 📄 firestore-data-model.md   # Firestore 데이터 모델 설계 v2.0 🔥 NEW
+│   └── 📄 mission-system.md          # 미션 시스템 개발 문서 🔥 NEW
 │
 ├── 📁 public/                        # 정적 파일
 ├── 📁 scripts/                       # 빌드/배포 스크립트
