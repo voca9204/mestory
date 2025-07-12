@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   HomeIcon, 
   CalendarIcon, 
@@ -20,6 +20,7 @@ import {
 } from '@heroicons/react/24/solid'
 import { useAuth } from '../contexts/AuthContext'
 import { logOut, signInWithGoogle } from '../services/auth'
+import useMissionStore from '../store/missionStore'
 
 const navigationItems = [
   { name: '홈', href: '/', icon: HomeIcon, activeIcon: HomeIconSolid },
@@ -35,6 +36,22 @@ export function Navigation() {
   const navigate = useNavigate()
   const { user, isDemoMode, setDemoMode } = useAuth()
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const { getActiveMissions } = useMissionStore()
+  const [activeMissionsCount, setActiveMissionsCount] = useState(0)
+
+  // 진행 중인 미션 개수 확인
+  useEffect(() => {
+    const updateMissionCount = () => {
+      const count = getActiveMissions().length
+      setActiveMissionsCount(count)
+    }
+    
+    updateMissionCount()
+    // 미션 상태가 변경될 수 있으므로 주기적으로 확인
+    const interval = setInterval(updateMissionCount, 5000)
+    
+    return () => clearInterval(interval)
+  }, [getActiveMissions])
 
   const isActive = (href: string) => {
     if (href === '/') {
@@ -85,7 +102,7 @@ export function Navigation() {
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`relative flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     active
                       ? 'bg-blue-100 text-blue-700'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -93,6 +110,12 @@ export function Navigation() {
                 >
                   <Icon className="w-5 h-5" />
                   <span>{item.name}</span>
+                  {/* 미션 배지 */}
+                  {item.name === '미션' && activeMissionsCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      {activeMissionsCount}
+                    </span>
+                  )}
                 </Link>
               )
             })}
@@ -161,7 +184,7 @@ export function Navigation() {
               <Link
                 key={item.name}
                 to={item.href}
-                className={`flex flex-col items-center space-y-1 px-2 py-2 text-xs font-medium ${
+                className={`relative flex flex-col items-center space-y-1 px-2 py-2 text-xs font-medium ${
                   active
                     ? 'text-blue-600'
                     : 'text-gray-600'
@@ -169,6 +192,12 @@ export function Navigation() {
               >
                 <Icon className="w-5 h-5" />
                 <span>{item.name}</span>
+                {/* 모바일 미션 배지 */}
+                {item.name === '미션' && activeMissionsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                    {activeMissionsCount}
+                  </span>
+                )}
               </Link>
             )
           })}
